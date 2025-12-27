@@ -116,10 +116,17 @@ FIREBASE_SERVICE_ACCOUNT_JSON='{...}'
 API_KEY_MASTER=your_master_key_here
 JWT_SECRET=your_jwt_secret_here
 
+# Notification Queuing
+QUEUE_EXPIRY_HOURS=24
+
 # Rate Limiting
 RATE_LIMIT_POINTS=100
 RATE_LIMIT_DURATION=60
 ```
+
+**Variable Descriptions:**
+
+- `QUEUE_EXPIRY_HOURS`: Number of hours queued notifications remain valid before expiration (default: 24). Notifications queued for offline users are automatically deleted after this period.
 
 ### Database Migration
 

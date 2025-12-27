@@ -16,8 +16,18 @@ curl -H "X-API-Key: your-api-key-here" \
 | Scope      | Description                     | Endpoints                                               |
 | ---------- | ------------------------------- | ------------------------------------------------------- |
 | `topic`    | Topic notifications only        | `POST /v1/notifications/topic`                          |
-| `personal` | Personal & device notifications | `POST /v1/devices/*`, `POST /v1/notifications/personal` |
+| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications`, `POST /v1/notifications/user-status/*` |
 | `admin`    | Full system access              | All endpoints + health metrics                          |
+
+### Scope-Based Authorization
+
+The API uses NestJS guards for fine-grained authorization:
+
+- **ApiKeyGuard**: Validates API key existence and extracts scopes
+- **TopicScopeGuard**: Requires `topic` scope
+- **PersonalScopeGuard**: Requires `personal` scope
+- **AdminScopeGuard**: Requires `admin` scope
+- **PersonalOrAdminScopeGuard**: Requires `personal` or `admin` scope
 
 ## 🚀 Base URL
 
@@ -236,9 +246,13 @@ Send personalized notifications to specific users.
       "messageId": "projects/project-id/messages/123456789",
       "success": true
     }
-  ]
+  ],
+  "queuedForUsers": ["user123"],
+  "deliveredToUsers": ["user456"]
 }
 ```
+
+**Note:** Notifications are automatically queued for offline/paused users and delivered when they come back online. The response indicates which users received immediate delivery vs. queuing.
 
 ### GET /v1/notifications
 
@@ -323,7 +337,126 @@ Sync notifications for clients (optional implementation).
 
 ---
 
-## 📋 Request/Response Schemas
+## � User Status Management
+
+### POST /v1/notifications/user-status/online
+
+Mark user as online and deliver any queued notifications.
+
+**Required Scope:** `personal` or `admin`
+
+**Request Body:**
+
+```json
+{
+  "userId": "user123"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "userId": "user123",
+  "status": "online",
+  "queuedNotificationsDelivered": 3,
+  "updatedAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+### POST /v1/notifications/user-status/offline
+
+Mark user as offline. Future notifications will be queued.
+
+**Required Scope:** `personal` or `admin`
+
+**Request Body:**
+
+```json
+{
+  "userId": "user123"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "userId": "user123",
+  "status": "offline",
+  "updatedAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+### POST /v1/notifications/user-status/pause
+
+Pause notifications for user. Similar to offline but temporary.
+
+**Required Scope:** `personal` or `admin`
+
+**Request Body:**
+
+```json
+{
+  "userId": "user123"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "userId": "user123",
+  "status": "paused",
+  "updatedAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+### POST /v1/notifications/user-status/resume
+
+Resume notifications for user and deliver queued notifications.
+
+**Required Scope:** `personal` or `admin`
+
+**Request Body:**
+
+```json
+{
+  "userId": "user123"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "userId": "user123",
+  "status": "online",
+  "queuedNotificationsDelivered": 2,
+  "updatedAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+### GET /v1/notifications/user-status/:userId
+
+Get current user status.
+
+**Required Scope:** `personal` or `admin`
+
+**Response (200 OK):**
+
+```json
+{
+  "userId": "user123",
+  "status": "online",
+  "lastStatusChange": "2025-12-09T22:50:00.000Z",
+  "queuedNotificationsCount": 0
+}
+```
+
+---
+
+## �📋 Request/Response Schemas
 
 ### Common Notification Fields
 

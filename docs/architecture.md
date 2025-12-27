@@ -59,32 +59,35 @@ The Notifications Microservice is built using **NestJS** with a modern, scalable
        │
        │ 1:N
        │
-┌──────▼───────┐
-│   Device     │
-│──────────────│
-│ id (PK)      │
-│ userId (FK)  │
-│ platform     │
-│ fcmToken     │◄──────┐
-│ lastSeenAt   │       │
-│ meta (JSON)  │       │
-│ createdAt    │       │
-│ updatedAt    │       │
-└──────┬───────┘       │
-       │               │
-       │ 1:N           │
-       │               │
-┌──────▼────────────┐  │
-│NotificationTarget │  │
-│───────────────────│  │
-│ id (PK)           │  │
-│ notificationId(FK)│  │
-│ deviceId (FK)     │──┘
+┌──────▼───────┐     ┌──────────────┐
+│   Device     │     │  UserStatus  │
+│──────────────│     │──────────────│
+│ id (PK)      │     │ id (PK)      │
+│ userId (FK)  │◄────┤ userId (FK)  │
+│ platform     │     │ status       │
+│ fcmToken     │     │ lastChangeAt │
+│ lastSeenAt   │     │ createdAt    │
+│ meta (JSON)  │     │ updatedAt    │
+│ createdAt    │     └──────┬───────┘
+│ updatedAt    │            │
+└──────┬───────┘            │
+       │                    │
+       │ 1:N                │
+       │                    │
+┌──────▼────────────┐       │
+│NotificationTarget │       │
+│───────────────────│       │
+│ id (PK)           │       │
+│ notificationId(FK)│       │
+│ deviceId (FK)     │       │
+│ userId (FK)       │◄──────┘
 │ token             │
 │ status            │
 │ fcmResponse(JSON) │
 │ deliveredAt       │
 │ read              │
+│ queuedAt          │
+│ expiresAt         │
 │ createdAt         │
 └──────▲────────────┘
        │
@@ -128,6 +131,13 @@ Represents a physical device (iOS/Android) registered for push notifications.
 - **platform**: Device platform (ios/android)
 - **meta**: Additional device metadata (app version, OS version, etc.)
 
+#### UserStatus
+
+Tracks user availability for smart notification queuing.
+
+- **status**: Current user status (online/offline/paused)
+- **lastChangeAt**: Timestamp of last status change
+
 #### Notification
 
 Core notification entity storing the notification content and metadata.
@@ -138,11 +148,13 @@ Core notification entity storing the notification content and metadata.
 
 #### NotificationTarget
 
-Junction table tracking delivery status for each device.
+Junction table tracking delivery status for each device, with queuing support.
 
-- **status**: pending | sent | failed | invalid
+- **status**: pending | sent | failed | invalid | queued
 - **fcmResponse**: FCM API response for debugging
 - **read**: Whether user has read the notification
+- **queuedAt**: Timestamp when notification was queued (for offline users)
+- **expiresAt**: Expiration timestamp for queued notifications
 
 #### ApiKey
 
@@ -274,11 +286,21 @@ Secure API key authentication with scope-based permissions.
    - Validates scopes against endpoint requirements
 3. **Rate Limiting**: Throttled per key (100 requests/60 seconds by default)
 
+### Scope-Based Authorization Guards
+
+The system uses NestJS guards for fine-grained authorization:
+
+- **ApiKeyGuard**: Validates API key existence and extracts scopes
+- **TopicScopeGuard**: Requires `topic` scope for topic notifications
+- **PersonalScopeGuard**: Requires `personal` scope for personal notifications and device management
+- **AdminScopeGuard**: Requires `admin` scope for full system access
+- **PersonalOrAdminScopeGuard**: Requires `personal` or `admin` scope
+
 ### Scopes
 
-- **topic**: Can send topic notifications
-- **personal**: Can send personal notifications to users
-- **admin**: Full system access (future use)
+- **topic**: Can send topic notifications only
+- **personal**: Can send personal notifications, manage devices, and user status
+- **admin**: Full system access including health metrics
 
 ## Scalability Considerations
 

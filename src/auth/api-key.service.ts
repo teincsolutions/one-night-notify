@@ -6,60 +6,42 @@ import * as argon2 from 'argon2';
 export class ApiKeyService {
   constructor(private prisma: PrismaService) {}
 
-  async validateApiKey(
-    apiKey: string,
-    url: string,
-    method: string,
-  ): Promise<boolean> {
+  async validateApiKey(apiKey: string): Promise<{ isValid: boolean; scopes?: string[] }> {
     try {
-      // Hash the incoming API key
-      const keyHash = await argon2.hash(apiKey);
+      // Find all API keys in database
+      const apiKeyRecords = await this.prisma.apiKey.findMany();
 
-      // Find the API key in database
-      const apiKeyRecord = await this.prisma.apiKey.findMany({
-        where: { keyHash },
-      });
-
-      if (!apiKeyRecord || apiKeyRecord.length === 0) {
-        return false;
+      // Check if any stored hash matches the incoming API key
+      for (const keyRecord of apiKeyRecords) {
+        try {
+          const isValid = await argon2.verify(keyRecord.keyHash, apiKey);
+          if (isValid) {
+            return {
+              isValid: true,
+              scopes: keyRecord.scopes as string[],
+            };
+          }
+        } catch (error) {
+          // Continue to next key if verification fails
+          continue;
+        }
       }
 
-      // Get first matching key (should be unique)
-      const key = apiKeyRecord[0];
-
-      // Validate scopes based on the endpoint
-      const scopes = key.scopes as string[];
-
-      // Determine required scope based on URL and method
-      if (url.includes('/health')) {
-        return true; // Health check doesn't require API key
-      }
-
-      if (url.includes('/notifications/topic') && method === 'POST') {
-        return scopes.includes('topic');
-      }
-
-      if (
-        (url.includes('/notifications/personal') && method === 'POST') ||
-        (url.includes('/notifications/') && method === 'PATCH')
-      ) {
-        return scopes.includes('personal');
-      }
-
-      if (url.includes('/devices') || url.includes('/tokens')) {
-        return scopes.includes('personal') || scopes.includes('admin');
-      }
-
-      // Admin endpoints
-      if (url.includes('/admin') || url.includes('/metrics')) {
-        return scopes.includes('admin');
-      }
-
-      return false;
+      return { isValid: false };
     } catch (error) {
       console.error('API Key validation error:', error);
-      return false;
+      return { isValid: false };
     }
+  }
+
+  async validateScopes(requiredScopes: string[], userScopes: string[]): Promise<boolean> {
+    // If no scopes required, allow access
+    if (!requiredScopes || requiredScopes.length === 0) {
+      return true;
+    }
+
+    // Check if user has at least one of the required scopes
+    return requiredScopes.some(scope => userScopes.includes(scope));
   }
 
   async createApiKey(name: string, scopes: string[]): Promise<string> {

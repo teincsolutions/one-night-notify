@@ -33,6 +33,22 @@ export class DevicesService {
       });
     }
 
+    // If userId is provided, ensure the user exists
+    if (deviceData.userId) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { id: deviceData.userId },
+      });
+
+      if (!existingUser) {
+        // Create the user if it doesn't exist
+        await this.prisma.user.create({
+          data: {
+            id: deviceData.userId,
+          },
+        });
+      }
+    }
+
     // Create new device
     return this.prisma.device.create({
       data: {

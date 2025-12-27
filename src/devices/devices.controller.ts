@@ -12,14 +12,15 @@ import { ApiTags, ApiOperation, ApiBody, ApiResponse } from '@nestjs/swagger';
 import { DevicesService } from './devices.service';
 import { DeviceRegisterDto } from '../common/dto/device-register.dto';
 import { ApiKeyGuard } from '../auth/api-key.guard';
+import { PersonalOrAdminScopeGuard } from '../auth/scope.guard';
 
 @ApiTags('Devices')
 @Controller('v1/devices')
-@UseGuards(ApiKeyGuard)
 export class DevicesController {
   constructor(private readonly devicesService: DevicesService) {}
 
   @Post('register')
+  @UseGuards(ApiKeyGuard, PersonalOrAdminScopeGuard)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a device with FCM token' })
   @ApiBody({ type: DeviceRegisterDto })
@@ -44,6 +45,7 @@ export class DevicesController {
   }
 
   @Put('tokens/refresh')
+  @UseGuards(ApiKeyGuard, PersonalOrAdminScopeGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Refresh FCM token for device' })
   @ApiBody({

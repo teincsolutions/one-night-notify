@@ -13,6 +13,20 @@ model User {
     email     String?  @unique
     createdAt DateTime @default(now())
     devices   Device[]
+    status    UserStatus?
+}
+
+model UserStatus {
+    id          String   @id @default(uuid())
+    userId      String   @unique(map: "UserStatus_userId_unique")
+    isOnline    Boolean  @default(true)
+    lastSeenAt  DateTime @default(now())
+    pausedUntil DateTime?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+    @@unique([userId], map: "UserStatus_userId_key")
 }
 
 model Device {
@@ -45,10 +59,12 @@ model NotificationTarget {
     notificationId String
     deviceId       String?
     token          String
-    status         String // pending | sent | failed | invalid
+    status         String // pending | sent | failed | invalid | queued
     fcmResponse    Json?
     deliveredAt    DateTime?
     read           Boolean      @default(false)
+    queuedAt       DateTime?
+    expiresAt      DateTime?
     createdAt      DateTime     @default(now())
     notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
     device         Device?      @relation(fields: [deviceId], references: [id])

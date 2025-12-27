@@ -19,12 +19,15 @@ A production-ready **Notifications Microservice** built with NestJS, Prisma, Bul
 - Device registration & FCM token management
 - Topic-based notifications to multiple subscribers
 - Personal notifications to specific users
+- **Smart notification queuing** for offline users
+- **User status management** (online/offline/paused)
 - Notification history & inbox management
 - Mark as read functionality & sync
 
 🔄 **Background Processing**
 
 - BullMQ job queues for reliable delivery
+- **Automatic queued notification delivery** when users come online
 - Exponential backoff retry logic
 - Failed job handling & dead-letter queues
 - Automatic FCM token cleanup
@@ -32,6 +35,7 @@ A production-ready **Notifications Microservice** built with NestJS, Prisma, Bul
 🔒 **Security & Performance**
 
 - API key authentication with granular scopes
+- **Scope-based authorization guards** (NestJS)
 - Rate limiting per API key
 - Input validation with class-validator
 - Health checks & system metrics

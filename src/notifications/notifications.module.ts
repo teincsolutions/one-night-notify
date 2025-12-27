@@ -8,6 +8,7 @@ import { NotificationsService } from './notifications.service';
 import { FirebaseService } from './firebase.service';
 import { DatabaseModule } from '../database/database.module';
 import { AuthModule } from '../auth/auth.module';
+import { UserStatusService } from './user-status.service';
 
 @Module({
   imports: [
@@ -41,7 +42,8 @@ import { AuthModule } from '../auth/auth.module';
     FirebaseService,
     NotificationProcessor,
     NotificationQueueService,
+    UserStatusService,
   ],
-  exports: [NotificationsService, FirebaseService, NotificationQueueService],
+  exports: [NotificationsService, FirebaseService, NotificationQueueService, UserStatusService],
 })
 export class NotificationsModule {}

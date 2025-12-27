@@ -198,7 +198,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 
 ---
 
-## Flow 3: Personal Notification
+## Flow 3: Personal Notification (with User Status & Queuing)
 
 ### Step-by-Step Process
 
@@ -240,38 +240,70 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ┌──────▼──────────────┐
 │ NotificationsService│
 │                     │
-│ 2. Create Notif.    │
-│    record           │
+│ 2. Check User Status│
+│    for each userId  │
 └──────┬──────────────┘
        │
 ┌──────▼──────────────┐
 │   Database          │
-│   Notification +    │
-│   NotificationTarget│
-│   records           │
+│   UserStatus Query  │
+│   WHERE userId IN   │
+│   (userIds)         │
 └──────┬──────────────┘
        │
-┌──────▼──────────────┐
-│ Firebase Service    │
-│                     │
-│ 3. Send multicast   │
-│    to tokens        │
-└──────┬──────────────┘
-       │
-┌──────▼──────────────┐
-│ Firebase Cloud      │
-│ Messaging           │
-│                     │
-│ sendEach(tokens)    │
-└──────┬──────────────┘
-       │
-       │ responses: [{success, messageId}, ...]
+       │ status: [{userId, status: 'online'|'offline'|'paused'}, ...]
        │
 ┌──────▼──────────────┐
 │ NotificationsService│
 │                     │
-│ 4. Update targets   │
-│    with status      │
+│ 3. Split users:     │
+│    - Online: send now│
+│    - Offline: queue  │
+└──────┬──────────────┘
+       │
+       ├─ Online Users ──┐
+       │                 │
+┌──────▼──────────────┐ │
+│ Firebase Service    │ │
+│                     │ │
+│ Send multicast      │ │
+│ to online tokens    │ │
+└──────┬──────────────┘ │
+       │                 │
+┌──────▼──────────────┐ │
+│ Firebase Cloud      │ │
+│ Messaging           │ │
+│                     │ │
+│ sendEach(online)    │ │
+└──────┬──────────────┘ │
+       │                 │
+       │ responses: [{success, messageId}, ...]
+       │                 │
+       └─────────────────┘
+       ├─ Offline Users ─┐
+       │                 │
+┌──────▼──────────────┐ │
+│ NotificationsService│ │
+│                     │ │
+│ 4. Create Notif.    │ │
+│    + Queue targets   │ │
+│    (status: queued)  │ │
+└──────┬──────────────┘ │
+       │                 │
+┌──────▼──────────────┐ │
+│   Database          │ │
+│   Notification +    │ │
+│   NotificationTarget│ │
+│   (status: queued,  │ │
+│    expiresAt: +24h) │ │
+└──────┬──────────────┘ │
+       │                 │
+       └─────────────────┘
+┌──────▼──────────────┐
+│ NotificationsService│
+│                     │
+│ 5. Update online    │
+│    targets status   │
 └──────┬──────────────┘
        │
 ┌──────▼──────────────┐
@@ -282,7 +314,92 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
        │
 ┌──────▼──────────────┐
 │ Mobile Devices      │
-│ (specific users)    │
+│ (online users only) │
+└─────────────────────┘
+```
+
+### User Status Management Flow
+
+```
+┌─────────────┐
+│ Mobile App  │
+│             │
+│ User goes   │
+│ online      │
+└──────┬──────┘
+       │
+       │ POST /v1/notifications/user-status/online
+       │ {"userId": "uuid"}
+       │
+┌──────▼────────────┐
+│ NotificationsCtrl │
+└──────┬────────────┘
+       │
+┌──────▼─────────────┐
+│ UserStatusService  │
+│                    │
+│ 1. Update status   │
+│    to 'online'     │
+└──────┬─────────────┘
+       │
+┌──────▼─────────────┐
+│   Database         │
+│   UserStatus       │
+│   status: online   │
+└──────┬─────────────┘
+       │
+┌──────▼─────────────┐
+│ NotificationsService│
+│                     │
+│ 2. Find queued     │
+│    notifications   │
+└──────┬─────────────┘
+       │
+┌──────▼─────────────┐
+│   Database         │
+│   NotificationTarget│
+│   WHERE userId=uuid │
+│   AND status=queued │
+│   AND expiresAt>now │
+└──────┬─────────────┘
+       │
+       │ queued: [target1, target2, ...]
+       │
+┌──────▼─────────────┐
+│ NotificationsService│
+│                     │
+│ 3. Send queued     │
+│    notifications   │
+└──────┬─────────────┘
+       │
+┌──────▼─────────────┐
+│ Firebase Service   │
+│                    │
+│ Send to device     │
+└──────┬─────────────┘
+       │
+┌──────▼─────────────┐
+│ Firebase Cloud     │
+│ Messaging          │
+└──────┬─────────────┘
+       │
+┌──────▼─────────────┐
+│ NotificationsService│
+│                     │
+│ 4. Update targets  │
+│    status: sent     │
+└──────┬─────────────┘
+       │
+┌──────▼──────────────┐
+│   Database          │
+│   NotificationTarget│
+│   status: sent      │
+└──────┬──────────────┘
+       │
+┌──────▼──────────────┐
+│ Mobile Device       │
+│ (receives queued    │
+│  notifications)     │
 └─────────────────────┘
 ```
 
@@ -313,21 +430,21 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 {
   "notificationId": "notif-uuid",
   "fcmResponses": {
-    "successCount": 2,
+    "successCount": 1,
     "failureCount": 0,
     "responses": [
       {
         "success": true,
         "messageId": "projects/myproject/messages/0:1234567890"
-      },
-      {
-        "success": true,
-        "messageId": "projects/myproject/messages/0:1234567891"
       }
     ]
-  }
+  },
+  "queuedForUsers": ["223e4567-e89b-12d3-a456-426614174001"],
+  "deliveredToUsers": ["123e4567-e89b-12d3-a456-426614174000"]
 }
 ```
+
+**Note:** The response now includes `queuedForUsers` and `deliveredToUsers` arrays to indicate which users received immediate delivery vs. queuing based on their current status.
 
 ---
 
