@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   db:
@@ -15,7 +13,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
-      - notifications-network
+      - notify-network
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U postgres -d notifications" ]
       interval: 30s
@@ -32,7 +30,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - notifications-network
+      - notify-network
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 30s
@@ -44,7 +42,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: notifications-api
+    container_name: notify-api
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
     environment:
@@ -57,6 +55,7 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       RATE_LIMIT_POINTS: 100
       RATE_LIMIT_DURATION: 60
+      PRISMA_CLI_BINARY_TARGETS: linux-musl-arm64-openssl-3.0.x
     ports:
       - "3000:3000"
     depends_on:
@@ -65,7 +64,7 @@ services:
       redis:
         condition: service_healthy
     networks:
-      - notifications-network
+      - notify-network
     volumes:
       - ./logs:/app/logs
     healthcheck:
@@ -79,7 +78,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: notifications-worker
+    container_name: notify-worker
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
     environment:
@@ -88,29 +87,30 @@ services:
       DATABASE_URL: postgresql://postgres:password@db:5432/notifications
       REDIS_URL: redis://redis:6379
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
+      PRISMA_CLI_BINARY_TARGETS: linux-musl-arm64-openssl-3.0.x
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
-      - notifications-network
+      - notify-network
     volumes:
       - ./logs:/app/logs
     deploy:
-      replicas: 2
+      replicas: 1
 
   # Database Admin Interface (Optional)
   adminer:
     image: adminer:latest
-    container_name: notifications-adminer
+    container_name: notify-adminer
     restart: unless-stopped
     ports:
       - "8080:8080"
     depends_on:
       - db
     networks:
-      - notifications-network
+      - notify-network
 
 volumes:
   postgres_data:
@@ -119,5 +119,5 @@ volumes:
     driver: local
 
 networks:
-  notifications-network:
+  notify-network:
     driver: bridge

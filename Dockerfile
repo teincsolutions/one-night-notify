@@ -1,5 +1,5 @@
 # Stage 1: Build the application
-FROM node:20-alpine AS builder
+FROM node:16-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (including dev dependencies for build)
-RUN npm ci --only=production=false
+RUN npm ci --only=production=false --legacy-peer-deps
 
 # Copy source code
 COPY . .
@@ -20,7 +20,7 @@ RUN npx prisma generate
 RUN npm run build
 
 # Stage 2: Production image
-FROM node:20-alpine AS production
+FROM node:16-alpine AS production
 
 # Install dumb-init and wget for proper signal handling and health checks
 RUN apk add --no-cache dumb-init wget
@@ -36,7 +36,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
+RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
 
 # Copy built application
 COPY --from=builder /app/dist ./dist
