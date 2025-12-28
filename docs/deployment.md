@@ -89,7 +89,7 @@ services:
       dockerfile: Dockerfile
     command: ['dumb-init', 'node', 'dist/main']
     ports:
-      - '3000:3000'
+      - '4000:4000'
     environment:
       DATABASE_URL: postgresql://username:password@db:5432/notifications_db
       REDIS_URL: redis://redis:6379
@@ -177,7 +177,7 @@ For high availability, set up Redis Sentinel or Redis Cluster.
 ```bash
 # Server
 NODE_ENV=production
-PORT=3000
+PORT=4000
 
 # Database (use managed service in production)
 DATABASE_URL=postgresql://user:password@db-host:5432/notifications_db?sslmode=require
@@ -251,9 +251,9 @@ docker-compose up --scale worker=5
 ```nginx
 upstream api_backend {
     least_conn;
-    server api1:3000;
-    server api2:3000;
-    server api3:3000;
+    server api1:4000;
+    server api2:4000;
+    server api3:4000;
 }
 
 server {
@@ -391,7 +391,7 @@ GET /health/metrics
 
 ```dockerfile
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:3000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
+  CMD node -e "require('http').get('http://localhost:4000/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1))"
 ```
 
 ### Load Balancer Health Checks
@@ -504,7 +504,7 @@ spec:
         - name: api
           image: notifications-api:latest
           ports:
-            - containerPort: 3000
+            - containerPort: 4000
           env:
             - name: DATABASE_URL
               valueFrom:
@@ -519,7 +519,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 3000
+              port: 4000
             initialDelaySeconds: 10
             periodSeconds: 30
           resources:
@@ -578,7 +578,7 @@ spec:
   ports:
     - protocol: TCP
       port: 80
-      targetPort: 3000
+      targetPort: 4000
   type: LoadBalancer
 ```
 
@@ -663,7 +663,7 @@ npm run prisma:studio
 docker-compose up -d
 
 # 5. Health check
-curl http://localhost:3000/health
+curl http://localhost:4000/health
 ```
 
 ### Zero-Downtime Migrations

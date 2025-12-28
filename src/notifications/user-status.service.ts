@@ -6,7 +6,7 @@ export class UserStatusService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Set user online status
+   * Set user online status (for future features, doesn't affect push notifications)
    */
   async setUserOnline(userId: string): Promise<void> {
     await this.prisma.userStatus.upsert({
@@ -25,7 +25,7 @@ export class UserStatusService {
   }
 
   /**
-   * Set user offline status
+   * Set user offline status (for future features, doesn't affect push notifications)
    */
   async setUserOffline(userId: string): Promise<void> {
     await this.prisma.userStatus.upsert({
@@ -54,13 +54,12 @@ export class UserStatusService {
     await this.prisma.userStatus.upsert({
       where: { userId },
       update: {
-        isOnline: false,
         pausedUntil,
         lastSeenAt: new Date(),
       },
       create: {
         userId,
-        isOnline: false,
+        isOnline: true, // Default to online
         pausedUntil,
         lastSeenAt: new Date(),
       },
@@ -74,7 +73,6 @@ export class UserStatusService {
     await this.prisma.userStatus.upsert({
       where: { userId },
       update: {
-        isOnline: true,
         pausedUntil: null,
         lastSeenAt: new Date(),
       },
@@ -105,6 +103,29 @@ export class UserStatusService {
     }
 
     return userStatus.isOnline;
+  }
+
+  /**
+   * Get delivery action for user notifications
+   * Returns: 'send' | 'skip'
+   */
+  async getDeliveryAction(userId: string): Promise<'send' | 'skip'> {
+    const userStatus = await this.prisma.userStatus.findUnique({
+      where: { userId },
+    });
+
+    if (!userStatus) {
+      // Default to send if no status exists
+      return 'send';
+    }
+
+    // Check if notifications are paused - skip completely
+    if (userStatus.pausedUntil && userStatus.pausedUntil > new Date()) {
+      return 'skip';
+    }
+
+    // Always send push notifications (FCM will handle delivery)
+    return 'send';
   }
 
   /**

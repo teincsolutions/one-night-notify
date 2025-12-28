@@ -189,7 +189,7 @@ export class NotificationsController {
   @Post('user-status/online')
   @UseGuards(ApiKeyGuard, PersonalScopeGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Set user online and deliver queued notifications' })
+  @ApiOperation({ summary: 'Set user online status' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -201,7 +201,7 @@ export class NotificationsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'User set online and queued notifications delivered',
+    description: 'User set online',
     schema: {
       type: 'object',
       properties: {
@@ -211,8 +211,7 @@ export class NotificationsController {
   })
   async setUserOnline(@Body() body: { userId: string }) {
     await this.userStatusService.setUserOnline(body.userId);
-    const deliveredCount = await this.notificationsService.deliverQueuedNotifications(body.userId);
-    return { deliveredCount };
+    return { success: true };
   }
 
   @Post('user-status/offline')
@@ -277,7 +276,7 @@ export class NotificationsController {
   @Post('user-status/resume')
   @UseGuards(ApiKeyGuard, PersonalScopeGuard)
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resume notification delivery for a user and deliver queued notifications' })
+  @ApiOperation({ summary: 'Resume notification delivery for a user' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -289,18 +288,17 @@ export class NotificationsController {
   })
   @ApiResponse({
     status: 200,
-    description: 'Notification delivery resumed and queued notifications delivered',
+    description: 'User set online',
     schema: {
       type: 'object',
       properties: {
-        deliveredCount: { type: 'number' },
+        success: { type: 'boolean' },
       },
     },
   })
   async resumeNotifications(@Body() body: { userId: string }) {
     await this.userStatusService.resumeNotifications(body.userId);
-    const deliveredCount = await this.notificationsService.deliverQueuedNotifications(body.userId);
-    return { deliveredCount };
+    return { success: true };
   }
 
   @Get('user-status/:userId')

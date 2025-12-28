@@ -137,7 +137,7 @@ Environment variables
 .env.example must include:
 
 ```
-PORT=3000
+PORT=4000
 DATABASE_URL=postgresql://user:pass@db:5432/notifications
 REDIS_URL=redis://redis:6379
 FIREBASE_SERVICE_ACCOUNT_JSON='{"type":...}'

@@ -124,13 +124,13 @@ docker-compose -f docker-compose.production.yml ps
 
 ```bash
 # Health check
-curl http://localhost:3000/health
+curl http://localhost:4000/health
 
 # Expected response:
 # {"status":"ok","timestamp":"2025-12-10T00:00:00.000Z"}
 
 # Check Swagger docs
-curl http://localhost:3000/swagger
+curl http://localhost:4000/swagger
 ```
 
 ---
@@ -161,9 +161,9 @@ Then configure nginx/haproxy to load balance:
 ```nginx
 upstream api_backend {
     least_conn;
-    server localhost:3001;
-    server localhost:3002;
-    server localhost:3003;
+    server localhost:4000;
+    server localhost:4001;
+    server localhost:4002;
 }
 
 server {
@@ -206,10 +206,10 @@ docker stats notifications-api notifications-worker
 
 ```bash
 # API health
-curl http://localhost:3000/health
+curl http://localhost:4000/health
 
 # Detailed metrics
-curl http://localhost:3000/health/metrics
+curl http://localhost:4000/health/metrics
 ```
 
 ---
@@ -342,7 +342,7 @@ docker-compose -f docker-compose.production.yml exec worker sh
 redis-cli -h your-redis-host ping
 
 # Check queue status (from app)
-curl -H "X-API-Key: YOUR_ADMIN_KEY" http://localhost:3000/health/metrics
+curl -H "X-API-Key: YOUR_ADMIN_KEY" http://localhost:4000/health/metrics
 ```
 
 ### Database Connection Issues
@@ -395,7 +395,7 @@ networks:
 
 ```bash
 # Only allow API port from load balancer
-ufw allow from LOAD_BALANCER_IP to any port 3000
+ufw allow from LOAD_BALANCER_IP to any port 4000
 
 # Block direct access to other services
 ufw deny 5432  # PostgreSQL
@@ -415,7 +415,7 @@ server {
     ssl_certificate_key /etc/ssl/private/key.pem;
 
     location / {
-        proxy_pass http://localhost:3000;
+        proxy_pass http://localhost:4000;
     }
 }
 ```

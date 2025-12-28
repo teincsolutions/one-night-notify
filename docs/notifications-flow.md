@@ -73,7 +73,7 @@ The notification system supports two types of notifications:
 ### Request Example
 
 ```bash
-curl -X POST http://localhost:3000/v1/devices/register \
+curl -X POST http://localhost:4000/v1/devices/register \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -168,7 +168,7 @@ curl -X POST http://localhost:3000/v1/devices/register \
 ### Request Example
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/topic \
+curl -X POST http://localhost:4000/v1/notifications/topic \
   -H "X-API-Key: YOUR_TOPIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -406,7 +406,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ### Request Example
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -506,7 +506,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Request Example
 
 ```bash
-curl -X GET "http://localhost:3000/v1/notifications?userId=123e4567-e89b-12d3-a456-426614174000&limit=20&offset=0" \
+curl -X GET "http://localhost:4000/v1/notifications?userId=123e4567-e89b-12d3-a456-426614174000&limit=20&offset=0" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
@@ -603,7 +603,7 @@ curl -X GET "http://localhost:3000/v1/notifications?userId=123e4567-e89b-12d3-a4
 ### Request Example
 
 ```bash
-curl -X PATCH http://localhost:3000/v1/notifications/target-uuid-1/mark-read \
+curl -X PATCH http://localhost:4000/v1/notifications/target-uuid-1/mark-read \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -632,7 +632,7 @@ When a device's FCM token changes (app reinstall, token rotation), the client mu
 ### Request Example
 
 ```bash
-curl -X PUT http://localhost:3000/v1/devices/tokens/refresh \
+curl -X PUT http://localhost:4000/v1/devices/tokens/refresh \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

@@ -176,7 +176,7 @@ Once configured, test with:
 
 ```bash
 # Register a test device
-curl -X POST http://localhost:3000/v1/devices/register \
+curl -X POST http://localhost:4000/v1/devices/register \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -186,7 +186,7 @@ curl -X POST http://localhost:3000/v1/devices/register \
   }'
 
 # Send test notification
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{

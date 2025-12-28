@@ -58,7 +58,7 @@ async function seedDatabase(): Promise<void> {
       '2. Use these keys in your API requests with header: X-API-Key',
     );
     console.log('3. Start the application: npm run start:dev');
-    console.log('4. Access Swagger UI at: http://localhost:3000/swagger');
+    console.log('4. Access Swagger UI at: http://localhost:4000/swagger');
   } catch (error) {
     console.error('❌ Error seeding database:', error);
     process.exit(1);

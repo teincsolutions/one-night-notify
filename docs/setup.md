@@ -100,7 +100,7 @@ brew services start redis
 
 ```bash
 # Server
-PORT=3000
+PORT=4000  # Default port (can be overridden)
 NODE_ENV=development
 
 # Database
@@ -186,7 +186,7 @@ docker build -t notifications-api .
 # Run with environment variables
 docker run -d \
   --name notifications-api \
-  -p 3000:3000 \
+  -p 4000:4000 \
   --env-file .env \
   notifications-api
 ```
@@ -210,13 +210,13 @@ npm run start:dev
 npm run start:dev
 
 # Check health endpoint
-curl http://localhost:3000/health
+curl http://localhost:4000/health
 
 # Expected response:
 # {"status":"ok","timestamp":"2025-12-09T22:50:00.000Z"}
 
 # Swagger UI should be available at:
-# http://localhost:3000/swagger
+# http://localhost:4000/swagger
 ```
 
 ### API Key Test
@@ -224,7 +224,7 @@ curl http://localhost:3000/health
 ```bash
 # Test API key authentication
 curl -H "X-API-Key: your-api-key-here" \
-     http://localhost:3000/v1/notifications?userId=test-user
+     http://localhost:4000/v1/notifications?userId=test-user
 
 # Should return empty array (no notifications yet)
 ```
@@ -233,7 +233,7 @@ curl -H "X-API-Key: your-api-key-here" \
 
 ```bash
 # Register a test device
-curl -X POST http://localhost:3000/v1/devices/register \
+curl -X POST http://localhost:4000/v1/devices/register \
   -H "Content-Type: application/json" \
   -H "X-API-Key: your-personal-api-key" \
   -d '{

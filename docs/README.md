@@ -45,9 +45,9 @@ npm run start:dev
 
 ### API Access
 
-- **API URL**: http://localhost:3000
-- **Swagger UI**: http://localhost:3000/swagger
-- **Health Check**: http://localhost:3000/health
+- **API URL**: http://localhost:4000
+- **Swagger UI**: http://localhost:4000/swagger
+- **Health Check**: http://localhost:4000/health
 
 ### Docker Deployment
 

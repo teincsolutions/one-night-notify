@@ -82,15 +82,19 @@ export class NotificationsService {
     });
 
     // Separate devices by delivery status
-    const immediateDevices: typeof devices = [];
-    const queuedDevices: typeof devices = [];
+    const sendDevices: typeof devices = [];
+    const skippedUsers: string[] = [];
 
     for (const [userId, userDevices] of userDeviceMap) {
-      const shouldDeliver = await this.userStatusService.shouldDeliverNotifications(userId);
-      if (shouldDeliver) {
-        immediateDevices.push(...userDevices);
-      } else {
-        queuedDevices.push(...userDevices);
+      const deliveryAction = await this.userStatusService.getDeliveryAction(userId);
+      
+      switch (deliveryAction) {
+        case 'send':
+          sendDevices.push(...userDevices);
+          break;
+        case 'skip':
+          skippedUsers.push(userId);
+          break;
       }
     }
 
@@ -107,17 +111,17 @@ export class NotificationsService {
 
     const results = {
       notificationId: notification.id,
-      immediate: { count: 0, fcmResponses: [] },
-      queued: { count: 0 },
+      sent: { count: 0, fcmResponses: [] },
+      skipped: { count: 0, users: [] as string[] },
     };
 
-    // Handle immediate notifications
-    if (immediateDevices.length > 0) {
-      const deviceTokens = immediateDevices.map((device) => device.fcmToken);
-      const deviceIds = immediateDevices.map((device) => device.id);
+    // Handle sending notifications
+    if (sendDevices.length > 0) {
+      const deviceTokens = sendDevices.map((device) => device.fcmToken);
+      const deviceIds = sendDevices.map((device) => device.id);
 
-      // Create notification targets for immediate delivery
-      const immediateTargets = deviceTokens.map((token, index) => ({
+      // Create notification targets for delivery
+      const sendTargets = deviceTokens.map((token, index) => ({
         notificationId: notification.id,
         deviceId: deviceIds[index],
         token,
@@ -125,7 +129,7 @@ export class NotificationsService {
       }));
 
       await this.prisma.notificationTarget.createMany({
-        data: immediateTargets,
+        data: sendTargets,
       });
 
       try {
@@ -153,8 +157,8 @@ export class NotificationsService {
           deviceTokens,
         );
 
-        results.immediate = {
-          count: immediateDevices.length,
+        results.sent = {
+          count: sendDevices.length,
           fcmResponses,
         };
       } catch (error) {
@@ -170,27 +174,9 @@ export class NotificationsService {
       }
     }
 
-    // Handle queued notifications
-    if (queuedDevices.length > 0) {
-      const queueExpiryHours = parseInt(this.config.get('QUEUE_EXPIRY_HOURS', '24'));
-      const expiresAt = new Date();
-      expiresAt.setHours(expiresAt.getHours() + queueExpiryHours);
-
-      const queuedTargets = queuedDevices.map((device) => ({
-        notificationId: notification.id,
-        deviceId: device.id,
-        token: device.fcmToken,
-        status: 'queued',
-        queuedAt: new Date(),
-        expiresAt,
-      }));
-
-      await this.prisma.notificationTarget.createMany({
-        data: queuedTargets,
-      });
-
-      results.queued.count = queuedDevices.length;
-    }
+    // Add skipped users to results
+    results.skipped.count = skippedUsers.length;
+    results.skipped.users = skippedUsers;
 
     return results;
   }

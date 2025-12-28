@@ -76,8 +76,8 @@ npm run prisma:seed
 # Start development server
 npm run start:dev
 
-# The API will be available at http://localhost:3000
-# Swagger documentation: http://localhost:3000/swagger
+# The API will be available at http://localhost:4000
+# Swagger documentation: http://localhost:4000/swagger
 ```
 
 ### Docker Deployment
@@ -160,7 +160,7 @@ npm run test:cov
 ### Environment Variables (.env)
 
 ```bash
-PORT=3000
+PORT=4000
 DATABASE_URL=postgresql://user:pass@localhost:5432/notifications
 REDIS_URL=redis://localhost:6379
 FIREBASE_SERVICE_ACCOUNT_JSON='{...}'

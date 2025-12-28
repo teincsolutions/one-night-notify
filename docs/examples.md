@@ -19,7 +19,7 @@ This document provides comprehensive examples of different notification types an
 ### Example 1: Breaking News Alert
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/topic \
+curl -X POST http://localhost:4000/v1/notifications/topic \
   -H "X-API-Key: YOUR_TOPIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -52,7 +52,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ### Example 2: Sports Score Update
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/topic \
+curl -X POST http://localhost:4000/v1/notifications/topic \
   -H "X-API-Key: YOUR_TOPIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -76,7 +76,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ### Example 3: Weather Alert
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/topic \
+curl -X POST http://localhost:4000/v1/notifications/topic \
   -H "X-API-Key: YOUR_TOPIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -100,7 +100,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ### Example 1: Welcome Message
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -119,7 +119,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 2: Friend Request
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -141,7 +141,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 3: Message Notification
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -167,7 +167,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 1: Payment Received
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -191,7 +191,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 2: Payment Sent
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -215,7 +215,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 3: Low Balance Warning
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -237,7 +237,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 4: Subscription Renewal
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -264,7 +264,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 1: Limited Time Offer
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/topic \
+curl -X POST http://localhost:4000/v1/notifications/topic \
   -H "X-API-Key: YOUR_TOPIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -287,7 +287,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ### Example 2: Personalized Recommendation
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -309,7 +309,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 3: Abandoned Cart Reminder
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -337,7 +337,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 1: App Update Available
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/topic \
+curl -X POST http://localhost:4000/v1/notifications/topic \
   -H "X-API-Key: YOUR_TOPIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -358,7 +358,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ### Example 2: Maintenance Notice
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/topic \
+curl -X POST http://localhost:4000/v1/notifications/topic \
   -H "X-API-Key: YOUR_TOPIC_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -378,7 +378,7 @@ curl -X POST http://localhost:3000/v1/notifications/topic \
 ### Example 3: Security Alert
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -405,7 +405,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 1: Video Content
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -429,7 +429,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 2: Photo Shared
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -456,7 +456,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 1: E-commerce Order Update
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -481,7 +481,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 2: Delivery Status
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -505,7 +505,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example 3: Booking Confirmation
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -536,7 +536,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example: Group Activity
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -567,7 +567,7 @@ curl -X POST http://localhost:3000/v1/notifications/personal \
 ### Example: Background Sync
 
 ```bash
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_PERSONAL_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -623,7 +623,7 @@ iOS and Android handle notifications differently - test both!
 
 ```bash
 # Test with curl
-curl -X POST http://localhost:3000/v1/notifications/personal \
+curl -X POST http://localhost:4000/v1/notifications/personal \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d @test-notification.json
