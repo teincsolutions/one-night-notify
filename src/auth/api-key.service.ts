@@ -111,26 +111,40 @@ export class ApiKeyService {
   }
 
   async updateApiKey(id: string, updateData: { name?: string; scopes?: string[] }): Promise<ApiKeyResponseDto> {
-    const apiKey = await this.prisma.apiKey.update({
-      where: { id },
-      data: {
-        ...(updateData.name && { name: updateData.name }),
-        ...(updateData.scopes && { scopes: updateData.scopes as any }),
-      },
-    });
+    try {
+      const apiKey = await this.prisma.apiKey.update({
+        where: { id },
+        data: {
+          ...(updateData.name && { name: updateData.name }),
+          ...(updateData.scopes && { scopes: updateData.scopes as any }),
+        },
+      });
 
-    return {
-      id: apiKey.id,
-      name: apiKey.name,
-      scopes: apiKey.scopes as string[],
-      createdAt: apiKey.createdAt.toISOString(),
-    };
+      return {
+        id: apiKey.id,
+        name: apiKey.name,
+        scopes: apiKey.scopes as string[],
+        createdAt: apiKey.createdAt.toISOString(),
+      };
+    } catch (error) {
+      if (error.code === 'P2025') {
+        throw new NotFoundException('API key not found');
+      }
+      throw error;
+    }
   }
 
   async deleteApiKey(id: string): Promise<void> {
-    await this.prisma.apiKey.delete({
-      where: { id },
-    });
+    try {
+      await this.prisma.apiKey.delete({
+        where: { id },
+      });
+    } catch (error) {
+      if (error.code === 'P2025') {
+        throw new NotFoundException('API key not found');
+      }
+      throw error;
+    }
   }
 
   async regenerateApiKey(id: string): Promise<{ apiKey: string; keyData: ApiKeyResponseDto }> {
@@ -138,22 +152,29 @@ export class ApiKeyService {
     const newApiKey = this.generateRandomKey();
     const newKeyHash = await argon2.hash(newApiKey);
 
-    // Update the database record
-    const apiKeyRecord = await this.prisma.apiKey.update({
-      where: { id },
-      data: {
-        keyHash: newKeyHash,
-      },
-    });
+    try {
+      // Update the database record
+      const apiKeyRecord = await this.prisma.apiKey.update({
+        where: { id },
+        data: {
+          keyHash: newKeyHash,
+        },
+      });
 
-    const keyData: ApiKeyResponseDto = {
-      id: apiKeyRecord.id,
-      name: apiKeyRecord.name,
-      scopes: apiKeyRecord.scopes as string[],
-      createdAt: apiKeyRecord.createdAt.toISOString(),
-    };
+      const keyData: ApiKeyResponseDto = {
+        id: apiKeyRecord.id,
+        name: apiKeyRecord.name,
+        scopes: apiKeyRecord.scopes as string[],
+        createdAt: apiKeyRecord.createdAt.toISOString(),
+      };
 
-    return { apiKey: newApiKey, keyData };
+      return { apiKey: newApiKey, keyData };
+    } catch (error) {
+      if (error.code === 'P2025') {
+        throw new NotFoundException('API key not found');
+      }
+      throw error;
+    }
   }
 
   private generateRandomKey(length: number = 32): string {
