@@ -23,6 +23,7 @@ import {
 import { NotificationsService } from './notifications.service';
 import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
+import { DeviceNotificationDto } from '../common/dto/device-notification.dto';
 import {
   PaginationQueryDto,
   PaginatedResponse,
@@ -104,6 +105,42 @@ export class NotificationsController {
     );
   }
 
+  @Post('device')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send notification directly to specific device tokens' })
+  @ApiBody({ type: DeviceNotificationDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Device notification sent successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        notificationId: { type: 'string' },
+        sent: {
+          type: 'object',
+          properties: {
+            count: { type: 'number' },
+            fcmResponses: { type: 'array' },
+          },
+        },
+        invalidTokens: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
+  })
+  async sendToDevices(
+    @Body() deviceData: DeviceNotificationDto,
+    @Headers() headers: any,
+  ) {
+    return this.notificationsService.sendDeviceNotification(
+      deviceData,
+      headers['x-api-key'], // creator identifier
+    );
+  }
+
   @Get('user/:userId/history')
   @UseGuards(ApiKeyGuard, PersonalOrAdminScopeGuard)
   @ApiOperation({ summary: 'Get user notifications history' })
@@ -159,6 +196,154 @@ export class NotificationsController {
       userId,
       paginationQueryDto.page || 1,
       paginationQueryDto.limit || 10,
+    );
+  }
+
+  @Get('device/:deviceId/history')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @ApiOperation({ summary: 'Get device notifications history by device ID' })
+  @ApiParam({ name: 'deviceId', description: 'Device ID', type: String })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (default: 1)',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Items per page (default: 10, max: 100)',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Device notifications retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              targetId: { type: 'string' },
+              type: { type: 'string', enum: ['topic', 'personal', 'device'] },
+              title: { type: 'string' },
+              body: { type: 'string' },
+              data: { type: 'object' },
+              topic: { type: 'string', nullable: true },
+              createdAt: { type: 'string', format: 'date-time' },
+              read: { type: 'boolean' },
+              deliveredAt: {
+                type: 'string',
+                format: 'date-time',
+                nullable: true,
+              },
+            },
+          },
+        },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            total: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrev: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Device not found',
+  })
+  async getDeviceNotifications(
+    @Param('deviceId') deviceId: string,
+    @Query() paginationQueryDto: PaginationQueryDto,
+  ): Promise<PaginatedResponse<any>> {
+    return this.notificationsService.getNotificationsForDevice(
+      deviceId,
+      paginationQueryDto.page || 1,
+      paginationQueryDto.limit || 10,
+      false, // byToken = false
+    );
+  }
+
+  @Get('device/token/:fcmToken/history')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @ApiOperation({ summary: 'Get device notifications history by FCM token' })
+  @ApiParam({ name: 'fcmToken', description: 'FCM token', type: String })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    description: 'Page number (default: 1)',
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    description: 'Items per page (default: 10, max: 100)',
+    type: Number,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Device notifications retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              targetId: { type: 'string' },
+              type: { type: 'string', enum: ['topic', 'personal', 'device'] },
+              title: { type: 'string' },
+              body: { type: 'string' },
+              data: { type: 'object' },
+              topic: { type: 'string', nullable: true },
+              createdAt: { type: 'string', format: 'date-time' },
+              read: { type: 'boolean' },
+              deliveredAt: {
+                type: 'string',
+                format: 'date-time',
+                nullable: true,
+              },
+            },
+          },
+        },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            total: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrev: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Device not found',
+  })
+  async getDeviceNotificationsByToken(
+    @Param('fcmToken') fcmToken: string,
+    @Query() paginationQueryDto: PaginationQueryDto,
+  ): Promise<PaginatedResponse<any>> {
+    return this.notificationsService.getNotificationsForDevice(
+      fcmToken,
+      paginationQueryDto.page || 1,
+      paginationQueryDto.limit || 10,
+      true, // byToken = true
     );
   }
 
@@ -271,6 +456,156 @@ export class NotificationsController {
     return this.notificationsService.markNotificationsRead(
       body.targetIds,
       userId,
+    );
+  }
+
+  @Patch('device/:deviceId/mark-read/:targetId')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark device notification as read' })
+  @ApiParam({ name: 'deviceId', description: 'Device ID' })
+  @ApiParam({
+    name: 'targetId',
+    description: 'Notification target ID (from device notification history)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification marked as read',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Device or notification target not found',
+  })
+  async markDeviceNotificationAsRead(
+    @Param('deviceId') deviceId: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.notificationsService.markDeviceNotificationRead(
+      targetId,
+      deviceId,
+      false, // byToken = false
+    );
+  }
+
+  @Patch('device/token/:fcmToken/mark-read/:targetId')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark device notification as read by FCM token' })
+  @ApiParam({ name: 'fcmToken', description: 'FCM token' })
+  @ApiParam({
+    name: 'targetId',
+    description: 'Notification target ID (from device notification history)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification marked as read',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Device or notification target not found',
+  })
+  async markDeviceNotificationAsReadByToken(
+    @Param('fcmToken') fcmToken: string,
+    @Param('targetId') targetId: string,
+  ) {
+    return this.notificationsService.markDeviceNotificationRead(
+      targetId,
+      fcmToken,
+      true, // byToken = true
+    );
+  }
+
+  @Patch('device/:deviceId/mark-read')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark multiple device notifications as read' })
+  @ApiParam({ name: 'deviceId', description: 'Device ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        targetIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of notification target IDs to mark as read',
+        },
+      },
+      required: ['targetIds'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notifications marked as read',
+    schema: {
+      type: 'object',
+      properties: {
+        markedAsRead: { type: 'number' },
+        targetIds: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Device not found or some notification targets not found',
+  })
+  async markDeviceNotificationsAsRead(
+    @Param('deviceId') deviceId: string,
+    @Body() body: { targetIds: string[] },
+  ) {
+    return this.notificationsService.markDeviceNotificationsRead(
+      body.targetIds,
+      deviceId,
+      false, // byToken = false
+    );
+  }
+
+  @Patch('device/token/:fcmToken/mark-read')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark multiple device notifications as read by FCM token' })
+  @ApiParam({ name: 'fcmToken', description: 'FCM token' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        targetIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of notification target IDs to mark as read',
+        },
+      },
+      required: ['targetIds'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notifications marked as read',
+    schema: {
+      type: 'object',
+      properties: {
+        markedAsRead: { type: 'number' },
+        targetIds: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Device not found or some notification targets not found',
+  })
+  async markDeviceNotificationsAsReadByToken(
+    @Param('fcmToken') fcmToken: string,
+    @Body() body: { targetIds: string[] },
+  ) {
+    return this.notificationsService.markDeviceNotificationsRead(
+      body.targetIds,
+      fcmToken,
+      true, // byToken = true
     );
   }
 

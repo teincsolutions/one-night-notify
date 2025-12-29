@@ -13,6 +13,22 @@ export class DevicesService {
       where: { fcmToken: deviceData.fcmToken },
     });
 
+    // If userId is provided, ensure the user exists (do this before any updates)
+    if (deviceData.userId) {
+      const existingUser = await this.prisma.user.findUnique({
+        where: { id: deviceData.userId },
+      });
+
+      if (!existingUser) {
+        // Create the user if it doesn't exist
+        await this.prisma.user.create({
+          data: {
+            id: deviceData.userId,
+          },
+        });
+      }
+    }
+
     if (existingDevice) {
       // Update existing device with new info
       const updateData: any = {
@@ -28,13 +44,20 @@ export class DevicesService {
         updateData.meta = existingDevice.meta;
       }
 
-      return this.prisma.device.update({
-        where: { fcmToken: deviceData.fcmToken },
-        data: updateData,
-      });
+      try {
+        return this.prisma.device.update({
+          where: { fcmToken: deviceData.fcmToken },
+          data: updateData,
+        });
+      } catch (error) {
+        if (error.code === 'P2003') {
+          throw new NotFoundException('Invalid user ID - user does not exist');
+        }
+        throw error;
+      }
     }
 
-    // If userId is provided, ensure the user exists
+    // If userId is provided, ensure the user exists (this check is now redundant but kept for clarity)
     if (deviceData.userId) {
       const existingUser = await this.prisma.user.findUnique({
         where: { id: deviceData.userId },
@@ -77,16 +100,39 @@ export class DevicesService {
     });
 
     if (existingDevice && existingDevice.id !== device.id) {
+      // Validate userId exists before updating
+      if (device.userId) {
+        const existingUser = await this.prisma.user.findUnique({
+          where: { id: device.userId },
+        });
+
+        if (!existingUser) {
+          // Create the user if it doesn't exist
+          await this.prisma.user.create({
+            data: {
+              id: device.userId,
+            },
+          });
+        }
+      }
+
       // Update the existing device's info with current device's info
-      await this.prisma.device.update({
-        where: { fcmToken: newToken },
-        data: {
-          userId: device.userId,
-          platform: device.platform,
-          meta: device.meta !== null ? device.meta : undefined,
-          lastSeenAt: new Date(),
-        },
-      });
+      try {
+        await this.prisma.device.update({
+          where: { fcmToken: newToken },
+          data: {
+            userId: device.userId,
+            platform: device.platform,
+            meta: device.meta !== null ? device.meta : undefined,
+            lastSeenAt: new Date(),
+          },
+        });
+      } catch (error) {
+        if (error.code === 'P2003') {
+          throw new NotFoundException('Invalid user ID - user does not exist');
+        }
+        throw error;
+      }
 
       // Delete old device
       await this.prisma.device.delete({

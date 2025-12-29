@@ -16,7 +16,7 @@ curl -H "X-API-Key: your-api-key-here" \
 | Scope      | Description                     | Endpoints                                               |
 | ---------- | ------------------------------- | ------------------------------------------------------- |
 | `topic`    | Topic notifications only        | `POST /v1/notifications/topic`                          |
-| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications/user/*/history`, `PATCH /v1/notifications/user/*/mark-read`, `PATCH /v1/notifications/user/*/mark-read`, `POST /v1/notifications/user/*/status/pause`, `POST /v1/notifications/user/*/status/resume`, `GET /v1/notifications/user/*/status` |
+| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `POST /v1/notifications/device`, `GET /v1/notifications/user/*/history`, `GET /v1/notifications/device/*/history`, `GET /v1/notifications/device/token/*/history`, `PATCH /v1/notifications/user/*/mark-read`, `PATCH /v1/notifications/user/*/mark-read`, `PATCH /v1/notifications/device/*/mark-read`, `PATCH /v1/notifications/device/*/mark-read`, `PATCH /v1/notifications/device/token/*/mark-read`, `PATCH /v1/notifications/device/token/*/mark-read`, `POST /v1/notifications/user/*/status/pause`, `POST /v1/notifications/user/*/status/resume`, `GET /v1/notifications/user/*/status` |
 | `admin`    | Full system access              | All endpoints + `GET /v1/notifications/admin/all`, `GET /v1/devices/admin/all`, `POST|GET|PUT|DELETE /v1/api-keys/*` |
 
 ### Scope-Based Authorization
@@ -389,6 +389,383 @@ Send personalized notifications to specific users.
 ```
 
 **Note:** Notifications are automatically queued for paused users and delivered when the pause period ends. The response indicates which users received immediate delivery vs. queuing.
+
+### POST /v1/notifications/device
+
+Send notifications directly to specific device tokens. This endpoint works with both registered devices (with or without user association) and handles invalid tokens gracefully.
+
+**Required Scope:** `personal` or `admin`
+
+**Request Body:**
+
+```json
+{
+  "tokens": ["fcm-token-1", "fcm-token-2"],
+  "title": "Device Message",
+  "body": "Hello! This message is sent directly to your device.",
+  "data": {
+    "type": "announcement",
+    "priority": "high"
+  },
+  "icon": "https://example.com/icon.png",
+  "image": "https://example.com/image.jpg",
+  "clickAction": "https://example.com/action"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "notificationId": "notification-uuid",
+  "sent": {
+    "count": 1,
+    "fcmResponses": [
+      {
+        "messageId": "projects/project-id/messages/123456789",
+        "success": true
+      }
+    ]
+  },
+  "invalidTokens": ["fcm-token-2"]
+}
+```
+
+**Response Fields:**
+
+- `notificationId`: Unique identifier for the notification record
+- `sent.count`: Number of devices that received the notification
+- `sent.fcmResponses`: Array of Firebase Cloud Messaging responses
+- `invalidTokens`: Array of tokens that were not found in the device registry
+
+**Notes:**
+
+- Only active devices receive notifications
+- Invalid tokens are reported but don't cause the request to fail
+- Notifications are stored in the database for tracking purposes
+- This endpoint is useful for sending notifications to anonymous devices or devices not associated with users
+
+### GET /v1/notifications/device/:deviceId/history
+
+Get device notifications history by device ID.
+
+**Required Scope:** `personal` or `admin`
+
+**Path Parameters:**
+
+- `deviceId`: Device identifier
+
+**Query Parameters:**
+
+- `page` (optional): Page number (default: 1, minimum: 1)
+- `limit` (optional): Number of notifications per page (default: 10, max: 100)
+
+**Request:**
+
+```
+GET /v1/notifications/device/device-uuid/history?page=1&limit=10
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "id": "notification-uuid",
+      "targetId": "target-uuid",
+      "type": "device",
+      "title": "Device Message",
+      "body": "Hello! This message was sent directly to your device.",
+      "data": {
+        "type": "announcement",
+        "priority": "high"
+      },
+      "createdAt": "2025-12-09T22:50:00.000Z",
+      "read": false,
+      "deliveredAt": "2025-12-09T22:50:05.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 25,
+    "totalPages": 3,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Device not found"
+}
+```
+
+### GET /v1/notifications/device/token/:fcmToken/history
+
+Get device notifications history by FCM token.
+
+**Required Scope:** `personal` or `admin`
+
+**Path Parameters:**
+
+- `fcmToken`: FCM registration token
+
+**Query Parameters:**
+
+- `page` (optional): Page number (default: 1, minimum: 1)
+- `limit` (optional): Number of notifications per page (default: 10, max: 100)
+
+**Request:**
+
+```
+GET /v1/notifications/device/token/eAbCdEfG_hI:APA91bF.../history?page=1&limit=10
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "id": "notification-uuid",
+      "targetId": "target-uuid",
+      "type": "device",
+      "title": "Device Message",
+      "body": "Hello! This message was sent directly to your device.",
+      "data": {
+        "type": "announcement",
+        "priority": "high"
+      },
+      "createdAt": "2025-12-09T22:50:00.000Z",
+      "read": false,
+      "deliveredAt": "2025-12-09T22:50:05.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 25,
+    "totalPages": 3,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Device not found"
+}
+```
+
+### PATCH /v1/notifications/device/:deviceId/mark-read/:targetId
+
+Mark a device notification as read.
+
+**Required Scope:** `personal` or `admin`
+
+**Path Parameters:**
+
+- `deviceId`: Device identifier
+- `targetId`: Notification target ID (from device notification history)
+
+**Request:**
+
+```
+PATCH /v1/notifications/device/device-uuid/mark-read/target-uuid
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "target-uuid",
+  "notificationId": "notification-uuid",
+  "deviceId": "device-uuid",
+  "read": true,
+  "deliveredAt": "2025-12-09T22:50:05.000Z",
+  "createdAt": "2025-12-09T22:50:00.000Z",
+  "updatedAt": "2025-12-09T22:50:05.000Z"
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Device not found"
+}
+```
+
+**Or:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Notification target not found or does not belong to the specified device"
+}
+```
+
+### PATCH /v1/notifications/device/token/:fcmToken/mark-read/:targetId
+
+Mark a device notification as read by FCM token.
+
+**Required Scope:** `personal` or `admin`
+
+**Path Parameters:**
+
+- `fcmToken`: FCM registration token
+- `targetId`: Notification target ID (from device notification history)
+
+**Request:**
+
+```
+PATCH /v1/notifications/device/token/eAbCdEfG_hI:APA91bF.../mark-read/target-uuid
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "target-uuid",
+  "notificationId": "notification-uuid",
+  "deviceId": "device-uuid",
+  "read": true,
+  "deliveredAt": "2025-12-09T22:50:05.000Z",
+  "createdAt": "2025-12-09T22:50:00.000Z",
+  "updatedAt": "2025-12-09T22:50:05.000Z"
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Device not found"
+}
+```
+
+**Or:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Notification target not found or does not belong to the specified device"
+}
+```
+
+### PATCH /v1/notifications/device/:deviceId/mark-read
+
+Mark multiple device notifications as read.
+
+**Required Scope:** `personal` or `admin`
+
+**Path Parameters:**
+
+- `deviceId`: Device identifier
+
+**Request Body:**
+
+```json
+{
+  "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
+}
+```
+
+**Request:**
+
+```
+PATCH /v1/notifications/device/device-uuid/mark-read
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "markedAsRead": 3,
+  "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Device not found"
+}
+```
+
+**Or:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Notification targets not found or do not belong to the specified device: target-uuid-2"
+}
+```
+
+### PATCH /v1/notifications/device/token/:fcmToken/mark-read
+
+Mark multiple device notifications as read by FCM token.
+
+**Required Scope:** `personal` or `admin`
+
+**Path Parameters:**
+
+- `fcmToken`: FCM registration token
+
+**Request Body:**
+
+```json
+{
+  "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
+}
+```
+
+**Request:**
+
+```
+PATCH /v1/notifications/device/token/eAbCdEfG_hI:APA91bF.../mark-read
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "markedAsRead": 3,
+  "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Device not found"
+}
+```
+
+**Or:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Notification targets not found or do not belong to the specified device: target-uuid-2"
+}
+```
 
 ### GET /v1/notifications/:id
 

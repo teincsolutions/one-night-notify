@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { ConfigService } from '@nestjs/config';
 import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
+import { DeviceNotificationDto } from '../common/dto/device-notification.dto';
 import { PaginationMeta, PaginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../database/prisma.service';
 import { FirebaseService, FCMMessage } from './firebase.service';
@@ -183,6 +184,103 @@ export class NotificationsService {
     return results;
   }
 
+  async sendDeviceNotification(
+    deviceData: DeviceNotificationDto,
+    createdBy?: string,
+  ) {
+    // Get devices by tokens (including those without userId)
+    const devices = await this.prisma.device.findMany({
+      where: {
+        fcmToken: {
+          in: deviceData.tokens,
+        },
+        isActive: true,
+      },
+    });
+
+    // Find tokens that don't have devices in our database
+    const existingTokens = devices.map(d => d.fcmToken);
+    const missingTokens = deviceData.tokens.filter(token => !existingTokens.includes(token));
+
+    // Create notification record
+    const notification = await this.prisma.notification.create({
+      data: {
+        type: 'device',
+        title: deviceData.title,
+        body: deviceData.body,
+        data: deviceData.data as any,
+        createdBy,
+      },
+    });
+
+    const results = {
+      notificationId: notification.id,
+      sent: { count: 0, fcmResponses: [] },
+      invalidTokens: missingTokens,
+    };
+
+    // Handle sending notifications to existing devices
+    if (devices.length > 0) {
+      const deviceTokens = devices.map((device) => device.fcmToken);
+      const deviceIds = devices.map((device) => device.id);
+
+      // Create notification targets for delivery
+      const sendTargets = deviceTokens.map((token, index) => ({
+        notificationId: notification.id,
+        deviceId: deviceIds[index],
+        token,
+        status: 'pending',
+      }));
+
+      await this.prisma.notificationTarget.createMany({
+        data: sendTargets,
+      });
+
+      try {
+        // Send immediately via Firebase
+        const fcmMessage: FCMMessage = {
+          title: deviceData.title,
+          body: deviceData.body,
+          data: deviceData.data
+            ? this.convertDataToStringMap(deviceData.data)
+            : undefined,
+          icon: deviceData.icon,
+          image: deviceData.image,
+          clickAction: deviceData.clickAction,
+        };
+
+        const fcmResponses = await this.firebaseService.sendMulticastMessage(
+          deviceTokens,
+          fcmMessage,
+        );
+
+        // Update notification targets with results
+        await this.updateNotificationTargetsWithResponse(
+          notification.id,
+          fcmResponses,
+          deviceTokens,
+        );
+
+        results.sent = {
+          count: devices.length,
+          fcmResponses,
+        };
+      } catch (error) {
+        console.error('Failed to send device notifications:', error);
+        // Mark targets as failed
+        await this.prisma.notificationTarget.updateMany({
+          where: { notificationId: notification.id, status: 'pending' },
+          data: {
+            status: 'failed',
+            fcmResponse: { error: error.message } as any,
+          },
+        });
+      }
+    }
+
+    return results;
+  }
+
   async getNotificationsForUser(
     userId: string,
     page: number = 1,
@@ -216,6 +314,74 @@ export class NotificationsService {
         deviceId: {
           in: deviceIds,
         },
+      },
+      include: {
+        notification: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    const data = notifications.map((target) => ({
+      id: target.notificationId,
+      targetId: target.id,
+      type: target.notification.type,
+      title: target.notification.title,
+      body: target.notification.body,
+      data: target.notification.data,
+      topic: target.notification.topic,
+      createdAt: target.notification.createdAt,
+      read: target.read,
+      deliveredAt: target.deliveredAt,
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+    const meta: PaginationMeta = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    return { data, meta };
+  }
+
+  async getNotificationsForDevice(
+    deviceIdentifier: string,
+    page: number = 1,
+    limit: number = 10,
+    byToken: boolean = false,
+  ): Promise<PaginatedResponse<any>> {
+    // Find device by ID or FCM token
+    const device = await this.prisma.device.findFirst({
+      where: byToken
+        ? { fcmToken: deviceIdentifier, isActive: true }
+        : { id: deviceIdentifier, isActive: true },
+    });
+
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+
+    // Calculate offset from page
+    const offset = (page - 1) * limit;
+
+    // Get total count for pagination metadata
+    const total = await this.prisma.notificationTarget.count({
+      where: {
+        deviceId: device.id,
+      },
+    });
+
+    // Get notifications targeted to this device
+    const notifications = await this.prisma.notificationTarget.findMany({
+      where: {
+        deviceId: device.id,
       },
       include: {
         notification: true,
@@ -371,6 +537,96 @@ export class NotificationsService {
 
     if (notFoundIds.length > 0) {
       throw new NotFoundException(`Notification targets not found or do not belong to the specified user: ${notFoundIds.join(', ')}`);
+    }
+
+    // Update all targets to mark as read
+    const updatePromises = targets.map(target =>
+      this.prisma.notificationTarget.update({
+        where: { id: target.id },
+        data: {
+          read: true,
+          deliveredAt: target.deliveredAt || new Date(),
+        },
+      })
+    );
+
+    const results = await Promise.all(updatePromises);
+
+    return {
+      markedAsRead: results.length,
+      targetIds: results.map(r => r.id),
+    };
+  }
+
+  async markDeviceNotificationRead(targetId: string, deviceIdentifier: string, byToken: boolean = false) {
+    // Find device by ID or FCM token
+    const device = await this.prisma.device.findFirst({
+      where: byToken
+        ? { fcmToken: deviceIdentifier, isActive: true }
+        : { id: deviceIdentifier, isActive: true },
+    });
+
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+
+    // Verify ownership
+    const target = await this.prisma.notificationTarget.findFirst({
+      where: {
+        id: targetId,
+        deviceId: device.id,
+      },
+    });
+
+    if (!target) {
+      throw new NotFoundException('Notification target not found or does not belong to the specified device');
+    }
+
+    return this.prisma.notificationTarget.update({
+      where: { id: targetId },
+      data: {
+        read: true,
+        deliveredAt: target.deliveredAt || new Date(),
+      },
+    });
+  }
+
+  async markDeviceNotificationsRead(targetIds: string[], deviceIdentifier: string, byToken: boolean = false) {
+    // Validate input
+    if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0) {
+      throw new BadRequestException('targetIds must be a non-empty array of strings');
+    }
+
+    // Ensure all elements are strings
+    if (!targetIds.every(id => typeof id === 'string' && id.trim().length > 0)) {
+      throw new BadRequestException('All targetIds must be non-empty strings');
+    }
+
+    // Find device by ID or FCM token
+    const device = await this.prisma.device.findFirst({
+      where: byToken
+        ? { fcmToken: deviceIdentifier, isActive: true }
+        : { id: deviceIdentifier, isActive: true },
+    });
+
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+
+    // Verify ownership of all targets
+    const targets = await this.prisma.notificationTarget.findMany({
+      where: {
+        id: { in: targetIds },
+        deviceId: device.id,
+      },
+    });
+
+    // Check if all requested targets were found and belong to the device
+    const foundTargetIds = targets.map(t => t.id);
+    const notFoundIds = targetIds.filter(id => !foundTargetIds.includes(id));
+
+    if (notFoundIds.length > 0) {
+      throw new NotFoundException(`Notification targets not found or do not belong to the specified device: ${notFoundIds.join(', ')}`);
     }
 
     // Update all targets to mark as read
