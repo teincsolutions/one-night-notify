@@ -352,12 +352,18 @@ Get a specific notification by its target ID.
 
 **Query Parameters:**
 
-- `userId` (required): User identifier (to verify ownership)
+- `userId` (optional): User identifier (required for personal scope to verify ownership, optional for admin scope)
 
 **Request:**
 
 ```
 GET /v1/notifications/target-uuid?userId=user123
+```
+
+**Or for admin users:**
+
+```
+GET /v1/notifications/target-uuid
 ```
 
 **Response (200 OK):**

@@ -24,7 +24,7 @@ import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
 import { PaginationQueryDto, PaginatedResponse } from '../common/dto/pagination.dto';
 import { ApiKeyGuard } from '../auth/api-key.guard';
-import { TopicScopeGuard, PersonalScopeGuard, AdminScopeGuard } from '../auth/scope.guard';
+import { TopicScopeGuard, PersonalScopeGuard, AdminScopeGuard, PersonalOrAdminScopeGuard } from '../auth/scope.guard';
 import { RequireTopicScope, RequirePersonalScope } from '../auth/scopes.decorator';
 import { UserStatusService } from './user-status.service';
 import { RequireAdminScope } from '../auth/scopes.decorator';
@@ -89,41 +89,6 @@ export class NotificationsController {
     );
   }
 
-  @Get(':id')
-  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
-  @ApiOperation({ summary: 'Get specific notification by target ID' })
-  @ApiParam({ name: 'id', description: 'Notification target ID' })
-  @ApiQuery({ name: 'userId', required: true, type: String })
-  @ApiResponse({
-    status: 200,
-    description: 'Notification retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        targetId: { type: 'string' },
-        type: { type: 'string', enum: ['topic', 'personal'] },
-        title: { type: 'string' },
-        body: { type: 'string' },
-        data: { type: 'object' },
-        topic: { type: 'string', nullable: true },
-        createdAt: { type: 'string', format: 'date-time' },
-        read: { type: 'boolean' },
-        deliveredAt: { type: 'string', format: 'date-time', nullable: true },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Notification not found',
-  })
-  async getNotificationById(
-    @Param('id') targetId: string,
-    @Query('userId') userId: string,
-  ) {
-    return this.notificationsService.getNotificationByTargetId(targetId, userId);
-  }
-
   @Get('history')
   @UseGuards(ApiKeyGuard, PersonalScopeGuard)
   @ApiOperation({ summary: 'Get user notifications history' })
@@ -175,6 +140,41 @@ export class NotificationsController {
       paginationQuery.page || 1,
       paginationQuery.limit || 10,
     );
+  }
+
+  @Get(':id')
+  @UseGuards(ApiKeyGuard, PersonalOrAdminScopeGuard)
+  @ApiOperation({ summary: 'Get specific notification by target ID' })
+  @ApiParam({ name: 'id', description: 'Notification target ID' })
+  @ApiQuery({ name: 'userId', required: false, type: String, description: 'User ID (required for personal scope, optional for admin scope)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        targetId: { type: 'string' },
+        type: { type: 'string', enum: ['topic', 'personal'] },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        data: { type: 'object' },
+        topic: { type: 'string', nullable: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        read: { type: 'boolean' },
+        deliveredAt: { type: 'string', format: 'date-time', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Notification not found',
+  })
+  async getNotificationById(
+    @Param('id') targetId: string,
+    @Query('userId') userId?: string,
+  ) {
+    return this.notificationsService.getNotificationByTargetId(targetId, userId);
   }
 
   @Patch(':id/mark-read')

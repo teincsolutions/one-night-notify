@@ -249,24 +249,16 @@ export class NotificationsService {
     return { data, meta };
   }
 
-  async getNotificationByTargetId(targetId: string, userId: string) {
-    // First check if user has any devices
-    const userDevices = await this.prisma.device.findMany({
-      where: { userId },
-      select: { id: true },
-    });
-
-    if (userDevices.length === 0) {
-      throw new NotFoundException('User not found');
-    }
-
-    // Get notification target with notification data, ensuring it belongs to the user
+  async getNotificationByTargetId(targetId: string, userId?: string) {
+    // Get notification target with notification data
     const target = await this.prisma.notificationTarget.findFirst({
-      where: {
+      where: userId ? {
         id: targetId,
         device: {
           userId,
         },
+      } : {
+        id: targetId,
       },
       include: {
         notification: true,
@@ -274,7 +266,20 @@ export class NotificationsService {
     });
 
     if (!target) {
-      throw new NotFoundException('Notification target not found or does not belong to the specified user');
+      if (userId) {
+        // First check if user exists (only if userId was provided)
+        const userDevices = await this.prisma.device.findMany({
+          where: { userId },
+          select: { id: true },
+        });
+
+        if (userDevices.length === 0) {
+          throw new NotFoundException('User not found');
+        }
+        throw new NotFoundException('Notification target not found or does not belong to the specified user');
+      } else {
+        throw new NotFoundException('Notification target not found');
+      }
     }
 
     return {
