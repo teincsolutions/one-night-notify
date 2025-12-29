@@ -17,7 +17,7 @@ curl -H "X-API-Key: your-api-key-here" \
 | ---------- | ------------------------------- | ------------------------------------------------------- |
 | `topic`    | Topic notifications only        | `POST /v1/notifications/topic`                          |
 | `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications`, `POST /v1/notifications/user-status/*` |
-| `admin`    | Full system access              | All endpoints + health metrics                          |
+| `admin`    | Full system access              | All endpoints + `GET /v1/notifications/admin/all`, `GET /v1/devices/admin/all` |
 
 ### Scope-Based Authorization
 
@@ -81,6 +81,53 @@ System metrics and performance data. **Requires admin scope.**
 ```bash
 curl -H "X-API-Key: admin-api-key" \
      https://api.example.com/health/metrics
+```
+
+### GET /v1/notifications/admin/all
+
+Get all notifications with pagination (admin only).
+
+**Required Scope:** `admin`
+
+**Query Parameters:**
+
+- `page` (optional): Page number (default: 1, minimum: 1)
+- `limit` (optional): Number of notifications per page (default: 10, max: 100)
+
+**Request:**
+
+```
+GET /v1/notifications/admin/all?page=1&limit=10
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "id": "notification-uuid",
+      "type": "topic",
+      "title": "Breaking News",
+      "body": "Important announcement",
+      "data": {
+        "category": "news"
+      },
+      "topic": "breaking_news",
+      "createdAt": "2025-12-09T22:50:00.000Z",
+      "createdBy": null,
+      "targetsCount": 150
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 25,
+    "totalPages": 3,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
 ```
 
 ---
@@ -170,6 +217,49 @@ Refresh FCM token when device token changes (e.g., app reinstall).
 }
 ```
 
+### GET /v1/devices/admin/all
+
+Get all devices with pagination (admin only).
+
+**Required Scope:** `admin`
+
+**Query Parameters:**
+
+- `page` (optional): Page number (default: 1, minimum: 1)
+- `limit` (optional): Number of devices per page (default: 10, max: 100)
+
+**Request:**
+
+```
+GET /v1/devices/admin/all?page=1&limit=10
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "id": "device-uuid",
+      "userId": "user123",
+      "platform": "ios",
+      "fcmToken": "eAbCdEfG_hI:APA91bF...",
+      "lastSeenAt": "2025-12-09T22:50:00.000Z",
+      "createdAt": "2025-12-09T22:50:00.000Z",
+      "updatedAt": "2025-12-09T22:50:00.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 150,
+    "totalPages": 15,
+    "hasNext": true,
+    "hasPrev": false
+  }
+}
+```
+
 ---
 
 ## 🔔 Notification Management
@@ -256,41 +346,51 @@ Send personalized notifications to specific users.
 
 ### GET /v1/notifications
 
-Retrieve user's notification history.
+Retrieve user's notification history with pagination.
 
 **Required Scope:** `personal` or `admin`
 
 **Query Parameters:**
 
 - `userId` (required): User identifier
-- `limit` (optional): Number of notifications (default: 50, max: 200)
-- `offset` (optional): Pagination offset (default: 0)
+- `page` (optional): Page number (default: 1, minimum: 1)
+- `limit` (optional): Number of notifications per page (default: 10, max: 100)
 
 **Request:**
 
 ```
-GET /v1/notifications?userId=user123&limit=20&offset=0
+GET /v1/notifications?userId=user123&page=1&limit=10
 ```
 
 **Response (200 OK):**
 
 ```json
-[
-  {
-    "id": "notification-uuid",
-    "targetId": "target-uuid",
-    "type": "personal",
-    "title": "Personal Message",
-    "body": "Hello! You have a new message.",
-    "data": {
-      "type": "message",
-      "senderId": "admin"
-    },
-    "createdAt": "2025-12-09T22:50:00.000Z",
-    "read": false,
-    "deliveredAt": "2025-12-09T22:50:05.000Z"
+{
+  "data": [
+    {
+      "id": "notification-uuid",
+      "targetId": "target-uuid",
+      "type": "personal",
+      "title": "Personal Message",
+      "body": "Hello! You have a new message.",
+      "data": {
+        "type": "message",
+        "senderId": "admin"
+      },
+      "createdAt": "2025-12-09T22:50:00.000Z",
+      "read": false,
+      "deliveredAt": "2025-12-09T22:50:05.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 25,
+    "totalPages": 3,
+    "hasNext": true,
+    "hasPrev": false
   }
-]
+}
 ```
 
 ### PATCH /v1/notifications/:id/mark-read

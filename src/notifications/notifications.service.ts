@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
+import { PaginationMeta, PaginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../database/prisma.service';
 import { FirebaseService, FCMMessage } from './firebase.service';
 import { UserStatusService } from './user-status.service';
@@ -183,15 +184,27 @@ export class NotificationsService {
 
   async getNotificationsForUser(
     userId: string,
-    limit: number = 50,
-    offset: number = 0,
-  ) {
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponse<any>> {
     // Get devices for user
     const devices = await this.prisma.device.findMany({
       where: { userId },
     });
 
     const deviceIds = devices.map((d) => d.id);
+
+    // Calculate offset from page
+    const offset = (page - 1) * limit;
+
+    // Get total count for pagination metadata
+    const total = await this.prisma.notificationTarget.count({
+      where: {
+        deviceId: {
+          in: deviceIds,
+        },
+      },
+    });
 
     // Get notifications targeted to user's devices
     const notifications = await this.prisma.notificationTarget.findMany({
@@ -210,7 +223,7 @@ export class NotificationsService {
       skip: offset,
     });
 
-    return notifications.map((target) => ({
+    const data = notifications.map((target) => ({
       id: target.notificationId,
       targetId: target.id,
       type: target.notification.type,
@@ -222,6 +235,18 @@ export class NotificationsService {
       read: target.read,
       deliveredAt: target.deliveredAt,
     }));
+
+    const totalPages = Math.ceil(total / limit);
+    const meta: PaginationMeta = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    return { data, meta };
   }
 
   async markNotificationRead(targetId: string, userId: string) {
@@ -359,5 +384,55 @@ export class NotificationsService {
       result[key] = typeof value === 'string' ? value : JSON.stringify(value);
     }
     return result;
+  }
+
+  async getAllNotifications(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponse<any>> {
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const total = await this.prisma.notification.count();
+
+    // Get notifications with target count
+    const notifications = await this.prisma.notification.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      skip: offset,
+      include: {
+        _count: {
+          select: {
+            targets: true,
+          },
+        },
+      },
+    });
+
+    const data = notifications.map((notification) => ({
+      id: notification.id,
+      type: notification.type,
+      title: notification.title,
+      body: notification.body,
+      data: notification.data,
+      topic: notification.topic,
+      createdAt: notification.createdAt,
+      createdBy: notification.createdBy,
+      targetsCount: notification._count.targets,
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+    const meta: PaginationMeta = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    return { data, meta };
   }
 }

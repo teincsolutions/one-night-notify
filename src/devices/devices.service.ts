@@ -1,5 +1,6 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import { DeviceRegisterDto } from '../common/dto/device-register.dto';
+import { PaginationMeta, PaginatedResponse } from '../common/dto/pagination.dto';
 import { PrismaService } from '../database/prisma.service';
 
 @Injectable()
@@ -67,7 +68,7 @@ export class DevicesService {
     });
 
     if (!device) {
-      throw new ConflictException('Device not found');
+      throw new NotFoundException('oldToken Device not found');
     }
 
     // Check if new token already exists
@@ -109,5 +110,46 @@ export class DevicesService {
     return this.prisma.device.findUnique({
       where: { fcmToken: token },
     });
+  }
+
+  async getAllDevices(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponse<any>> {
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const total = await this.prisma.device.count();
+
+    // Get devices
+    const devices = await this.prisma.device.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    const data = devices.map((device) => ({
+      id: device.id,
+      userId: device.userId,
+      platform: device.platform,
+      fcmToken: device.fcmToken,
+      lastSeenAt: device.lastSeenAt,
+      createdAt: device.createdAt,
+      updatedAt: device.updatedAt,
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+    const meta: PaginationMeta = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    return { data, meta };
   }
 }

@@ -22,10 +22,12 @@ import {
 import { NotificationsService } from './notifications.service';
 import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
+import { PaginationQueryDto, PaginatedResponse } from '../common/dto/pagination.dto';
 import { ApiKeyGuard } from '../auth/api-key.guard';
-import { TopicScopeGuard, PersonalScopeGuard } from '../auth/scope.guard';
+import { TopicScopeGuard, PersonalScopeGuard, AdminScopeGuard } from '../auth/scope.guard';
 import { RequireTopicScope, RequirePersonalScope } from '../auth/scopes.decorator';
 import { UserStatusService } from './user-status.service';
+import { RequireAdminScope } from '../auth/scopes.decorator';
 
 @ApiTags('Notifications')
 @Controller('v1/notifications')
@@ -91,41 +93,52 @@ export class NotificationsController {
   @UseGuards(ApiKeyGuard, PersonalScopeGuard)
   @ApiOperation({ summary: 'Get user notifications history' })
   @ApiQuery({ name: 'userId', required: true, type: String })
-  @ApiQuery({ name: 'limit', required: false, type: Number, example: 50 })
-  @ApiQuery({ name: 'offset', required: false, type: Number, example: 0 })
   @ApiResponse({
     status: 200,
     description: 'Notifications retrieved successfully',
     schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'string' },
-          targetId: { type: 'string' },
-          type: { type: 'string', enum: ['topic', 'personal'] },
-          title: { type: 'string' },
-          body: { type: 'string' },
-          data: { type: 'object' },
-          topic: { type: 'string', nullable: true },
-          createdAt: { type: 'string', format: 'date-time' },
-          read: { type: 'boolean' },
-          deliveredAt: { type: 'string', format: 'date-time', nullable: true },
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              targetId: { type: 'string' },
+              type: { type: 'string', enum: ['topic', 'personal'] },
+              title: { type: 'string' },
+              body: { type: 'string' },
+              data: { type: 'object' },
+              topic: { type: 'string', nullable: true },
+              createdAt: { type: 'string', format: 'date-time' },
+              read: { type: 'boolean' },
+              deliveredAt: { type: 'string', format: 'date-time', nullable: true },
+            },
+          },
+        },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            total: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrev: { type: 'boolean' },
+          },
         },
       },
     },
   })
   async getUserNotifications(
     @Query('userId') userId: string,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string,
-  ) {
-    const limitNum = limit ? parseInt(limit, 10) : 50;
-    const offsetNum = offset ? parseInt(offset, 10) : 0;
+    @Query() paginationQuery: PaginationQueryDto,
+  ): Promise<PaginatedResponse<any>> {
     return this.notificationsService.getNotificationsForUser(
       userId,
-      limitNum,
-      offsetNum,
+      paginationQuery.page || 1,
+      paginationQuery.limit || 10,
     );
   }
 
@@ -182,8 +195,8 @@ export class NotificationsController {
     @Body() body: { userId: string; lastSyncTimestamp?: string },
   ) {
     // For implementation, this would return notifications since lastSyncTimestamp
-    // Simplified to return all notifications for user
-    return this.notificationsService.getNotificationsForUser(body.userId);
+    // Simplified to return all notifications for user with default pagination
+    return this.notificationsService.getNotificationsForUser(body.userId, 1, 50);
   }
 
   @Post('user-status/online')
@@ -321,5 +334,54 @@ export class NotificationsController {
   })
   async getUserStatus(@Param('userId') userId: string) {
     return this.userStatusService.getUserStatus(userId);
+  }
+
+  @Get('admin/all')
+  @UseGuards(ApiKeyGuard, AdminScopeGuard)
+  @ApiOperation({ summary: 'Get all notifications (admin only)' })
+  @ApiResponse({
+    status: 200,
+    description: 'All notifications retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              type: { type: 'string', enum: ['topic', 'personal'] },
+              title: { type: 'string' },
+              body: { type: 'string' },
+              data: { type: 'object' },
+              topic: { type: 'string', nullable: true },
+              createdAt: { type: 'string', format: 'date-time' },
+              createdBy: { type: 'string', nullable: true },
+              targetsCount: { type: 'number' },
+            },
+          },
+        },
+        meta: {
+          type: 'object',
+          properties: {
+            page: { type: 'number' },
+            limit: { type: 'number' },
+            total: { type: 'number' },
+            totalPages: { type: 'number' },
+            hasNext: { type: 'boolean' },
+            hasPrev: { type: 'boolean' },
+          },
+        },
+      },
+    },
+  })
+  async getAllNotifications(
+    @Query() paginationQuery: PaginationQueryDto,
+  ): Promise<PaginatedResponse<any>> {
+    return this.notificationsService.getAllNotifications(
+      paginationQuery.page || 1,
+      paginationQuery.limit || 10,
+    );
   }
 }

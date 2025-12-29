@@ -35,9 +35,9 @@ async function seedDatabase(): Promise<void> {
 
   try {
     // Create default API keys for different scopes
-    await createApiKey('Topic Notifications', ['topic']);
-    await createApiKey('Personal Notifications', ['personal']);
-    await createApiKey('Admin Access', ['topic', 'personal', 'admin']);
+    // await createApiKey('Topic Notifications', ['topic']);
+    // await createApiKey('Personal Notifications', ['personal']);
+    // await createApiKey('Admin Access', ['topic', 'personal', 'admin']);
     await createApiKey('Full Access', ['topic', 'personal', 'admin']);
 
     // Create a sample user (optional)
