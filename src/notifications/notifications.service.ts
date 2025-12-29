@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
@@ -64,12 +64,13 @@ export class NotificationsService {
     personalData: PersonalNotificationDto,
     createdBy?: string,
   ) {
-    // Get device tokens for the users
+    // Get device tokens for the users (only active devices)
     const devices = await this.prisma.device.findMany({
       where: {
         userId: {
           in: personalData.userIds,
         },
+        isActive: true,
       },
     });
 
@@ -187,9 +188,12 @@ export class NotificationsService {
     page: number = 1,
     limit: number = 10,
   ): Promise<PaginatedResponse<any>> {
-    // Get devices for user
+    // Get active devices for user
     const devices = await this.prisma.device.findMany({
-      where: { userId },
+      where: { 
+        userId,
+        isActive: true,
+      },
     });
 
     const deviceIds = devices.map((d) => d.id);
@@ -331,6 +335,16 @@ export class NotificationsService {
   }
 
   async markNotificationsRead(targetIds: string[], userId: string) {
+    // Validate input
+    if (!targetIds || !Array.isArray(targetIds) || targetIds.length === 0) {
+      throw new BadRequestException('targetIds must be a non-empty array of strings');
+    }
+
+    // Ensure all elements are strings
+    if (!targetIds.every(id => typeof id === 'string' && id.trim().length > 0)) {
+      throw new BadRequestException('All targetIds must be non-empty strings');
+    }
+
     // First check if user has any devices
     const userDevices = await this.prisma.device.findMany({
       where: { userId },
@@ -397,88 +411,6 @@ export class NotificationsService {
     for (const update of updates) {
       await this.prisma.notificationTarget.update(update);
     }
-  }
-
-  /**
-   * Deliver queued notifications for a user when they come back online
-   */
-  async deliverQueuedNotifications(userId: string): Promise<number> {
-    // Get all queued notifications for the user that haven't expired
-    const queuedTargets = await this.prisma.notificationTarget.findMany({
-      where: {
-        device: {
-          userId,
-        },
-        status: 'queued',
-        expiresAt: {
-          gt: new Date(),
-        },
-      },
-      include: {
-        notification: true,
-      },
-    });
-
-    if (queuedTargets.length === 0) {
-      return 0;
-    }
-
-    let deliveredCount = 0;
-
-    // Group by notification for batch processing
-    const notificationMap = new Map<string, typeof queuedTargets>();
-    queuedTargets.forEach(target => {
-      if (!notificationMap.has(target.notificationId)) {
-        notificationMap.set(target.notificationId, []);
-      }
-      notificationMap.get(target.notificationId)!.push(target);
-    });
-
-    for (const [notificationId, targets] of notificationMap) {
-      const notification = targets[0].notification;
-      const tokens = targets.map(t => t.token);
-
-      try {
-        // Send the notification
-        const fcmMessage: FCMMessage = {
-          title: notification.title,
-          body: notification.body,
-          data: notification.data
-            ? this.convertDataToStringMap(notification.data as any)
-            : undefined,
-        };
-
-        const fcmResponses = await this.firebaseService.sendMulticastMessage(
-          tokens,
-          fcmMessage,
-        );
-
-        // Update targets as sent
-        await this.updateNotificationTargetsWithResponse(
-          notificationId,
-          fcmResponses,
-          tokens,
-        );
-
-        deliveredCount += targets.length;
-      } catch (error) {
-        console.error(`Failed to deliver queued notification ${notificationId}:`, error);
-        // Mark as failed
-        await this.prisma.notificationTarget.updateMany({
-          where: {
-            notificationId,
-            token: { in: tokens },
-            status: 'queued',
-          },
-          data: {
-            status: 'failed',
-            fcmResponse: { error: error.message } as any,
-          },
-        });
-      }
-    }
-
-    return deliveredCount;
   }
 
   private convertDataToStringMap(

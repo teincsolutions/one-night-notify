@@ -6,43 +6,6 @@ export class UserStatusService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Set user online status (for future features, doesn't affect push notifications)
-   */
-  async setUserOnline(userId: string): Promise<void> {
-    await this.prisma.userStatus.upsert({
-      where: { userId },
-      update: {
-        isOnline: true,
-        lastSeenAt: new Date(),
-        pausedUntil: null, // Clear any pause when user comes online
-      },
-      create: {
-        userId,
-        isOnline: true,
-        lastSeenAt: new Date(),
-      },
-    });
-  }
-
-  /**
-   * Set user offline status (for future features, doesn't affect push notifications)
-   */
-  async setUserOffline(userId: string): Promise<void> {
-    await this.prisma.userStatus.upsert({
-      where: { userId },
-      update: {
-        isOnline: false,
-        lastSeenAt: new Date(),
-      },
-      create: {
-        userId,
-        isOnline: false,
-        lastSeenAt: new Date(),
-      },
-    });
-  }
-
-  /**
    * Pause notification delivery for a user
    * @param userId User ID
    * @param durationMinutes How long to pause (default: 24 hours)
@@ -59,7 +22,6 @@ export class UserStatusService {
       },
       create: {
         userId,
-        isOnline: true, // Default to online
         pausedUntil,
         lastSeenAt: new Date(),
       },
@@ -78,7 +40,6 @@ export class UserStatusService {
       },
       create: {
         userId,
-        isOnline: true,
         lastSeenAt: new Date(),
       },
     });
@@ -93,7 +54,7 @@ export class UserStatusService {
     });
 
     if (!userStatus) {
-      // Default to online if no status exists
+      // Default to deliver if no status exists
       return true;
     }
 
@@ -102,7 +63,7 @@ export class UserStatusService {
       return false;
     }
 
-    return userStatus.isOnline;
+    return true;
   }
 
   /**
@@ -139,7 +100,6 @@ export class UserStatusService {
     if (!userStatus) {
       return {
         userId,
-        isOnline: true,
         lastSeenAt: null,
         pausedUntil: null,
       };
@@ -147,7 +107,6 @@ export class UserStatusService {
 
     return {
       userId: userStatus.userId,
-      isOnline: userStatus.isOnline,
       lastSeenAt: userStatus.lastSeenAt,
       pausedUntil: userStatus.pausedUntil,
       isPaused: userStatus.pausedUntil && userStatus.pausedUntil > new Date(),

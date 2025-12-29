@@ -106,9 +106,25 @@ export class DevicesService {
     });
   }
 
-  async getDeviceByToken(token: string) {
-    return this.prisma.device.findUnique({
-      where: { fcmToken: token },
+  async logoutDevice(fcmToken: string) {
+    const device = await this.prisma.device.findUnique({
+      where: { fcmToken },
+    });
+
+    if (!device) {
+      throw new NotFoundException('Device not found');
+    }
+
+    if (!device.isActive) {
+      throw new ConflictException('Device is already logged out');
+    }
+
+    return this.prisma.device.update({
+      where: { fcmToken },
+      data: {
+        isActive: false,
+        loggedOutAt: new Date(),
+      },
     });
   }
 

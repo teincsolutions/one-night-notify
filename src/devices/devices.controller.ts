@@ -69,6 +69,39 @@ export class DevicesController {
     return this.devicesService.refreshToken(body.oldToken, body.newToken);
   }
 
+  @Post('logout')
+  @UseGuards(ApiKeyGuard, PersonalOrAdminScopeGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Logout device (stop receiving notifications)' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        fcmToken: { type: 'string', description: 'FCM token of the device to logout' },
+      },
+      required: ['fcmToken'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Device logged out successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        userId: { type: 'string', nullable: true },
+        platform: { type: 'string', enum: ['ios', 'android'] },
+        fcmToken: { type: 'string' },
+        isActive: { type: 'boolean' },
+        loggedOutAt: { type: 'string', format: 'date-time' },
+        updatedAt: { type: 'string', format: 'date-time' },
+      },
+    },
+  })
+  async logout(@Body() body: { fcmToken: string }) {
+    return this.devicesService.logoutDevice(body.fcmToken);
+  }
+
   @Get('admin/all')
   @UseGuards(ApiKeyGuard, AdminScopeGuard)
   @ApiOperation({ summary: 'Get all devices (admin only)' })

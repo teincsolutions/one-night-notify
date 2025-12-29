@@ -19,15 +19,15 @@ A production-ready **Notifications Microservice** built with NestJS, Prisma, Bul
 - Device registration & FCM token management
 - Topic-based notifications to multiple subscribers
 - Personal notifications to specific users
-- **Smart notification queuing** for offline users
-- **User status management** (online/offline/paused)
+- **Smart notification queuing** for paused users
+- **User status management** (paused/resume)
 - Notification history & inbox management
 - Mark as read functionality & sync
 
 🔄 **Background Processing**
 
 - BullMQ job queues for reliable delivery
-- **Automatic queued notification delivery** when users come online
+- **Automatic queued notification delivery** when pause periods end
 - Exponential backoff retry logic
 - Failed job handling & dead-letter queues
 - Automatic FCM token cleanup
@@ -113,13 +113,18 @@ docker compose down
 
 - `POST /v1/devices/register` - Register device with FCM token
 - `PUT /v1/devices/tokens/refresh` - Refresh FCM token
+- `POST /v1/devices/logout` - Logout device (stop notifications)
 
 ### Notifications
 
 - `POST /v1/notifications/topic` - Send topic notification
 - `POST /v1/notifications/personal` - Send personal notification
-- `GET /v1/notifications` - Get user notification history
-- `PATCH /v1/notifications/:id/mark-read` - Mark notification as read
+- `GET /v1/notifications/user/:userId/history` - Get user notification history
+- `PATCH /v1/notifications/user/:userId/mark-read/:targetId` - Mark single notification as read
+- `PATCH /v1/notifications/user/:userId/mark-read` - Mark multiple notifications as read
+- `POST /v1/notifications/user/:userId/status/pause` - Pause user notifications
+- `POST /v1/notifications/user/:userId/status/resume` - Resume user notifications
+- `GET /v1/notifications/user/:userId/status` - Get user status
 - `POST /v1/notifications/sync` - Sync notifications for client
 
 ### System

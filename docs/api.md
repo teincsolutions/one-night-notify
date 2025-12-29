@@ -16,7 +16,7 @@ curl -H "X-API-Key: your-api-key-here" \
 | Scope      | Description                     | Endpoints                                               |
 | ---------- | ------------------------------- | ------------------------------------------------------- |
 | `topic`    | Topic notifications only        | `POST /v1/notifications/topic`                          |
-| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications/user/*/history`, `POST /v1/notifications/user-status/*` |
+| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications/user/*/history`, `PATCH /v1/notifications/user/*/mark-read`, `PATCH /v1/notifications/user/*/mark-read`, `POST /v1/notifications/user/*/status/pause`, `POST /v1/notifications/user/*/status/resume`, `GET /v1/notifications/user/*/status` |
 | `admin`    | Full system access              | All endpoints + `GET /v1/notifications/admin/all`, `GET /v1/devices/admin/all`, `POST|GET|PUT|DELETE /v1/api-keys/*` |
 
 ### Scope-Based Authorization
@@ -217,6 +217,52 @@ Refresh FCM token when device token changes (e.g., app reinstall).
 }
 ```
 
+### POST /v1/devices/logout
+
+Logout device to stop receiving notifications.
+
+**Required Scope:** `personal` or `admin`
+
+**Request Body:**
+
+```json
+{
+  "fcmToken": "device-fcm-token"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "device-uuid",
+  "userId": "user-id",
+  "platform": "ios",
+  "fcmToken": "device-fcm-token",
+  "isActive": false,
+  "loggedOutAt": "2025-12-09T22:50:00.000Z",
+  "updatedAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Device not found"
+}
+```
+
+**Response (409 Conflict):**
+
+```json
+{
+  "statusCode": 409,
+  "message": "Device is already logged out"
+}
+```
+
 ### GET /v1/devices/admin/all
 
 Get all devices with pagination (admin only).
@@ -342,7 +388,7 @@ Send personalized notifications to specific users.
 }
 ```
 
-**Note:** Notifications are automatically queued for offline/paused users and delivered when they come back online. The response indicates which users received immediate delivery vs. queuing.
+**Note:** Notifications are automatically queued for paused users and delivered when the pause period ends. The response indicates which users received immediate delivery vs. queuing.
 
 ### GET /v1/notifications/:id
 
@@ -409,6 +455,8 @@ Retrieve user's notification history with pagination.
 
 **Required Scope:** `personal` or `admin`
 
+**Important Note:** Each notification in the history includes both `id` (the notification content ID) and `targetId` (the unique delivery instance ID for this user). Use `targetId` when marking notifications as read, as it allows per-user read status tracking.
+
 **Path Parameters:**
 
 - `userId`: User identifier
@@ -455,22 +503,23 @@ GET /v1/notifications/user/user123/history?page=1&limit=10
 }
 ```
 
-### PATCH /v1/notifications/:id/mark-read
+### PATCH /v1/notifications/user/:userId/mark-read/:targetId
 
 Mark a specific notification as read.
 
 **Required Scope:** `personal` or `admin`
-**Ownership:** User can only mark their own notifications
+
+**Important Note:** This endpoint uses `targetId` (not `notificationId`) to mark notifications as read. Each notification delivery to a user has its own unique `targetId`, allowing individual read tracking per user. The same notification sent to multiple users will have different `targetId` values, enabling per-user read status management.
 
 **Path Parameters:**
-- `id`: Notification target ID (obtained from notification history endpoints)
 
-**Request Body:**
+- `userId`: User ID
+- `targetId`: Notification target ID (from notification history)
 
-```json
-{
-  "userId": "user123"
-}
+**Request:**
+
+```
+PATCH /v1/notifications/user/user123/mark-read/target-uuid
 ```
 
 **Response (200 OK):**
@@ -505,34 +554,30 @@ Mark a specific notification as read.
 }
 ```
 
-**Example:**
-
-```bash
-# First, get notification history to find target IDs
-curl -H "X-API-Key: personal-key" \
-     "https://api.example.com/v1/notifications/history?userId=user123"
-
-# Then mark a specific notification as read using its target ID
-curl -X PATCH https://api.example.com/v1/notifications/target-uuid/mark-read \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: personal-key" \
-  -d '{"userId": "user123"}'
-```
-
-### PATCH /v1/notifications/mark-read
+### PATCH /v1/notifications/user/:userId/mark-read
 
 Mark multiple notifications as read in a single request.
 
 **Required Scope:** `personal` or `admin`
-**Ownership:** User can only mark their own notifications
+
+**Important Note:** This endpoint accepts an array of `targetIds` (not `notificationIds`). Each `targetId` represents a specific notification delivery instance to the user, allowing precise per-user read status tracking.
+
+**Path Parameters:**
+
+- `userId`: User ID
 
 **Request Body:**
 
 ```json
 {
-  "userId": "user123",
   "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
 }
+```
+
+**Request:**
+
+```
+PATCH /v1/notifications/user/user123/mark-read
 ```
 
 **Response (200 OK):**
@@ -562,19 +607,6 @@ Mark multiple notifications as read in a single request.
 }
 ```
 
-**Example:**
-
-```bash
-# Mark multiple notifications as read
-curl -X PATCH https://api.example.com/v1/notifications/mark-read \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: personal-key" \
-  -d '{
-    "userId": "user123",
-    "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
-  }'
-```
-
 ### POST /v1/notifications/sync
 
 Sync notifications for clients (optional implementation).
@@ -594,101 +626,59 @@ Sync notifications for clients (optional implementation).
 
 ## � User Status Management
 
-### POST /v1/notifications/user-status/online
+### POST /v1/notifications/user/:userId/status/pause
 
-Mark user as online and deliver any queued notifications.
+Pause notifications for user temporarily.
 
 **Required Scope:** `personal` or `admin`
+
+**Path Parameters:**
+
+- `userId`: User ID
 
 **Request Body:**
 
 ```json
 {
-  "userId": "user123"
+  "durationMinutes": 1440
 }
+```
+
+**Request:**
+
+```
+POST /v1/notifications/user/user123/status/pause
 ```
 
 **Response (200 OK):**
 
 ```json
 {
-  "userId": "user123",
-  "status": "online",
-  "queuedNotificationsDelivered": 3,
-  "updatedAt": "2025-12-09T22:50:00.000Z"
+  "pausedUntil": "2025-12-10T22:50:00.000Z"
 }
 ```
 
-### POST /v1/notifications/user-status/offline
-
-Mark user as offline. Future notifications will be queued.
-
-**Required Scope:** `personal` or `admin`
-
-**Request Body:**
-
-```json
-{
-  "userId": "user123"
-}
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "userId": "user123",
-  "status": "offline",
-  "updatedAt": "2025-12-09T22:50:00.000Z"
-}
-```
-
-### POST /v1/notifications/user-status/pause
-
-Pause notifications for user. Similar to offline but temporary.
-
-**Required Scope:** `personal` or `admin`
-
-**Request Body:**
-
-```json
-{
-  "userId": "user123"
-}
-```
-
-**Response (200 OK):**
-
-```json
-{
-  "userId": "user123",
-  "status": "paused",
-  "updatedAt": "2025-12-09T22:50:00.000Z"
-}
-```
-
-### POST /v1/notifications/user-status/resume
+### POST /v1/notifications/user/:userId/status/resume
 
 Resume notifications for user and deliver queued notifications.
 
 **Required Scope:** `personal` or `admin`
 
-**Request Body:**
+**Path Parameters:**
 
-```json
-{
-  "userId": "user123"
-}
+- `userId`: User ID
+
+**Request:**
+
+```
+POST /v1/notifications/user/user123/status/resume
 ```
 
 **Response (200 OK):**
 
 ```json
 {
-  "userId": "user123",
-  "status": "online",
-  "queuedNotificationsDelivered": 2,
-  "updatedAt": "2025-12-09T22:50:00.000Z"
+  "success": true
 }
 ```
 
@@ -703,9 +693,9 @@ Get current user status.
 ```json
 {
   "userId": "user123",
-  "status": "online",
-  "lastStatusChange": "2025-12-09T22:50:00.000Z",
-  "queuedNotificationsCount": 0
+  "lastSeenAt": "2025-12-09T22:50:00.000Z",
+  "pausedUntil": null,
+  "isPaused": false
 }
 ```
 
@@ -739,16 +729,20 @@ interface DeviceRegistration {
 
 ### Notification Target Schema
 
+Each notification sent to a user creates a `NotificationTarget` record that tracks the delivery status and user interaction for that specific instance.
+
+**Key Concept:** The `id` field (targetId) is what you use to mark notifications as read, not the `notificationId`. This allows the same notification content to have different read statuses across multiple users.
+
 ```typescript
 interface NotificationTarget {
-  id: string; // Unique target ID
-  notificationId: string; // Parent notification ID
+  id: string; // Unique target ID - use this for mark-as-read operations
+  notificationId: string; // Parent notification ID (shared content)
   deviceId?: string; // Associated device ID
   token: string; // FCM token used
   status: 'pending' | 'sent' | 'failed' | 'invalid';
   fcmResponse?: object; // FCM API response
   deliveredAt?: string; // ISO timestamp
-  read: boolean; // Read status
+  read: boolean; // Read status (per user, per notification)
   createdAt: string; // ISO timestamp
 }
 ```
