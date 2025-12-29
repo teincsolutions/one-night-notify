@@ -50,7 +50,7 @@ export class ApiKeyService {
     // Generate a random API key
     const apiKey = this.generateRandomKey();
 
-    // Hash the API key
+    // Hash the API key for validation
     const keyHash = await argon2.hash(apiKey);
 
     // Save to database
@@ -108,23 +108,6 @@ export class ApiKeyService {
     };
 
     return { data, meta };
-  }
-
-  async getApiKeyById(id: string): Promise<ApiKeyResponseDto> {
-    const apiKey = await this.prisma.apiKey.findUnique({
-      where: { id },
-    });
-
-    if (!apiKey) {
-      throw new NotFoundException('API key not found');
-    }
-
-    return {
-      id: apiKey.id,
-      name: apiKey.name,
-      scopes: apiKey.scopes as string[],
-      createdAt: apiKey.createdAt.toISOString(),
-    };
   }
 
   async updateApiKey(id: string, updateData: { name?: string; scopes?: string[] }): Promise<ApiKeyResponseDto> {

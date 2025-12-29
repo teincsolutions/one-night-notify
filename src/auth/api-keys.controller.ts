@@ -86,19 +86,6 @@ export class ApiKeysController {
     );
   }
 
-  @Get(':id')
-  @UseGuards(ApiKeyGuard, AdminScopeGuard)
-  @ApiOperation({ summary: 'Get a specific API key by ID' })
-  @ApiParam({ name: 'id', description: 'API key ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'API key retrieved successfully',
-    schema: { $ref: '#/components/schemas/ApiKeyResponseDto' },
-  })
-  async getApiKey(@Param('id') id: string): Promise<ApiKeyResponseDto> {
-    return this.apiKeyService.getApiKeyById(id);
-  }
-
   @Put(':id')
   @UseGuards(ApiKeyGuard, AdminScopeGuard)
   @HttpCode(HttpStatus.OK)
