@@ -16,7 +16,7 @@ curl -H "X-API-Key: your-api-key-here" \
 | Scope      | Description                     | Endpoints                                               |
 | ---------- | ------------------------------- | ------------------------------------------------------- |
 | `topic`    | Topic notifications only        | `POST /v1/notifications/topic`                          |
-| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications/history`, `POST /v1/notifications/user-status/*` |
+| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications/user/*/history`, `POST /v1/notifications/user-status/*` |
 | `admin`    | Full system access              | All endpoints + `GET /v1/notifications/admin/all`, `GET /v1/devices/admin/all`, `POST|GET|PUT|DELETE /v1/api-keys/*` |
 
 ### Scope-Based Authorization
@@ -403,22 +403,25 @@ GET /v1/notifications/target-uuid
 }
 ```
 
-### GET /v1/notifications/history
+### GET /v1/notifications/user/:userId/history
 
 Retrieve user's notification history with pagination.
 
 **Required Scope:** `personal` or `admin`
 
+**Path Parameters:**
+
+- `userId`: User identifier
+
 **Query Parameters:**
 
-- `userId` (required): User identifier
 - `page` (optional): Page number (default: 1, minimum: 1)
 - `limit` (optional): Number of notifications per page (default: 10, max: 100)
 
 **Request:**
 
 ```
-GET /v1/notifications/history?userId=user123&page=1&limit=10
+GET /v1/notifications/user/user123/history?page=1&limit=10
 ```
 
 **Response (200 OK):**
@@ -828,7 +831,7 @@ curl -X POST https://api.example.com/v1/notifications/personal \
   -d '{"userIds": ["test-user"], "title": "Test", "body": "Hello from API!"}'
 
 # 3. Get notification history
-curl "https://api.example.com/v1/notifications/history?userId=test-user" \
+curl "https://api.example.com/v1/notifications/user/test-user/history" \
   -H "X-API-Key: personal-key"
 
 # 4. Mark single notification as read

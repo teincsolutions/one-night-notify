@@ -55,3 +55,32 @@ export class PersonalOrAdminScopeGuard extends ScopeGuard {
     super(apiKeyService, reflector, ['personal', 'admin']);
   }
 }
+
+@Injectable()
+export class PersonalOrAdminWithUserIdGuard implements CanActivate {
+  constructor(private apiKeyService: ApiKeyService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest();
+    const userScopes = request.apiKeyScopes as string[];
+
+    if (!userScopes) {
+      throw new ForbiddenException('API key validation required before scope check');
+    }
+
+    const hasRequiredScopes = this.apiKeyService.validateScopes(['personal', 'admin'], userScopes);
+    if (!hasRequiredScopes) {
+      throw new ForbiddenException(`Insufficient permissions. Required scopes: personal, admin`);
+    }
+
+    const isAdmin = userScopes.includes('admin');
+    const isPersonal = userScopes.includes('personal');
+
+    // For personal scope without admin, userId is required
+    if (isPersonal && !isAdmin && !request.query.userId) {
+      throw new ForbiddenException('userId query parameter is required for personal scope');
+    }
+
+    return true;
+  }
+}

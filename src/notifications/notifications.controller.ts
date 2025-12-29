@@ -24,7 +24,7 @@ import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
 import { PaginationQueryDto, PaginatedResponse } from '../common/dto/pagination.dto';
 import { ApiKeyGuard } from '../auth/api-key.guard';
-import { TopicScopeGuard, PersonalScopeGuard, AdminScopeGuard, PersonalOrAdminScopeGuard } from '../auth/scope.guard';
+import { TopicScopeGuard, PersonalScopeGuard, AdminScopeGuard, PersonalOrAdminScopeGuard, PersonalOrAdminWithUserIdGuard } from '../auth/scope.guard';
 import { RequireTopicScope, RequirePersonalScope } from '../auth/scopes.decorator';
 import { UserStatusService } from './user-status.service';
 import { RequireAdminScope } from '../auth/scopes.decorator';
@@ -89,10 +89,10 @@ export class NotificationsController {
     );
   }
 
-  @Get('history')
-  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @Get('user/:userId/history')
+  @UseGuards(ApiKeyGuard, PersonalOrAdminScopeGuard)
   @ApiOperation({ summary: 'Get user notifications history' })
-  @ApiQuery({ name: 'userId', required: true, type: String })
+  @ApiParam({ name: 'userId', description: 'User ID', type: String })
   @ApiResponse({
     status: 200,
     description: 'Notifications retrieved successfully',
@@ -132,21 +132,21 @@ export class NotificationsController {
     },
   })
   async getUserNotifications(
-    @Query('userId') userId: string,
-    @Query() paginationQuery: PaginationQueryDto,
+    @Param('userId') userId:  string,
+    @Query() paginationQueryDto: PaginationQueryDto,
   ): Promise<PaginatedResponse<any>> {
     return this.notificationsService.getNotificationsForUser(
       userId,
-      paginationQuery.page || 1,
-      paginationQuery.limit || 10,
+      paginationQueryDto.page || 1,
+      paginationQueryDto.limit || 10,
     );
   }
 
   @Get(':id')
-  @UseGuards(ApiKeyGuard, PersonalOrAdminScopeGuard)
+  @UseGuards(ApiKeyGuard, PersonalOrAdminWithUserIdGuard)
   @ApiOperation({ summary: 'Get specific notification by target ID' })
   @ApiParam({ name: 'id', description: 'Notification target ID' })
-  @ApiQuery({ name: 'userId', required: false, type: String, description: 'User ID (required for personal scope, optional for admin scope)' })
+  @ApiQuery({ name: 'userId', required: false, description: 'User ID (required for personal scope, optional for admin scope)' })
   @ApiResponse({
     status: 200,
     description: 'Notification retrieved successfully',
