@@ -89,7 +89,42 @@ export class NotificationsController {
     );
   }
 
-  @Get()
+  @Get(':id')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @ApiOperation({ summary: 'Get specific notification by target ID' })
+  @ApiParam({ name: 'id', description: 'Notification target ID' })
+  @ApiQuery({ name: 'userId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Notification retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        targetId: { type: 'string' },
+        type: { type: 'string', enum: ['topic', 'personal'] },
+        title: { type: 'string' },
+        body: { type: 'string' },
+        data: { type: 'object' },
+        topic: { type: 'string', nullable: true },
+        createdAt: { type: 'string', format: 'date-time' },
+        read: { type: 'boolean' },
+        deliveredAt: { type: 'string', format: 'date-time', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Notification not found',
+  })
+  async getNotificationById(
+    @Param('id') targetId: string,
+    @Query('userId') userId: string,
+  ) {
+    return this.notificationsService.getNotificationByTargetId(targetId, userId);
+  }
+
+  @Get('history')
   @UseGuards(ApiKeyGuard, PersonalScopeGuard)
   @ApiOperation({ summary: 'Get user notifications history' })
   @ApiQuery({ name: 'userId', required: true, type: String })
@@ -146,7 +181,7 @@ export class NotificationsController {
   @UseGuards(ApiKeyGuard, PersonalScopeGuard)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Mark notification as read' })
-  @ApiParam({ name: 'id', description: 'Notification target ID' })
+  @ApiParam({ name: 'id', description: 'Notification target ID (from notification history)' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -169,6 +204,54 @@ export class NotificationsController {
   ) {
     return this.notificationsService.markNotificationRead(
       targetId,
+      body.userId,
+    );
+  }
+
+  @Patch('mark-read')
+  @UseGuards(ApiKeyGuard, PersonalScopeGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Mark multiple notifications as read' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        userId: {
+          type: 'string',
+          description: 'User ID who read the notifications',
+        },
+        targetIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of notification target IDs to mark as read',
+        },
+      },
+      required: ['userId', 'targetIds'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Notifications marked as read',
+    schema: {
+      type: 'object',
+      properties: {
+        markedAsRead: { type: 'number' },
+        targetIds: {
+          type: 'array',
+          items: { type: 'string' },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Some notification targets not found or do not belong to the user',
+  })
+  async markMultipleAsRead(
+    @Body() body: { userId: string; targetIds: string[] },
+  ) {
+    return this.notificationsService.markNotificationsRead(
+      body.targetIds,
       body.userId,
     );
   }

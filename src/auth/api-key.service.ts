@@ -1,5 +1,7 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { PaginationMeta, PaginatedResponse } from '../common/dto/pagination.dto';
+import { ApiKeyResponseDto } from './dto/api-key.dto';
 import * as argon2 from 'argon2';
 
 @Injectable()
@@ -44,7 +46,7 @@ export class ApiKeyService {
     return requiredScopes.some(scope => userScopes.includes(scope));
   }
 
-  async createApiKey(name: string, scopes: string[]): Promise<string> {
+  async createApiKey(name: string, scopes: string[]): Promise<{ apiKey: string; keyData: ApiKeyResponseDto }> {
     // Generate a random API key
     const apiKey = this.generateRandomKey();
 
@@ -52,7 +54,7 @@ export class ApiKeyService {
     const keyHash = await argon2.hash(apiKey);
 
     // Save to database
-    await this.prisma.apiKey.create({
+    const apiKeyRecord = await this.prisma.apiKey.create({
       data: {
         name,
         keyHash,
@@ -60,7 +62,115 @@ export class ApiKeyService {
       },
     });
 
-    return apiKey;
+    const keyData: ApiKeyResponseDto = {
+      id: apiKeyRecord.id,
+      name: apiKeyRecord.name,
+      scopes: apiKeyRecord.scopes as string[],
+      createdAt: apiKeyRecord.createdAt.toISOString(),
+    };
+
+    return { apiKey, keyData };
+  }
+
+  async getAllApiKeys(
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<PaginatedResponse<ApiKeyResponseDto>> {
+    const offset = (page - 1) * limit;
+
+    // Get total count
+    const total = await this.prisma.apiKey.count();
+
+    // Get API keys
+    const apiKeys = await this.prisma.apiKey.findMany({
+      orderBy: {
+        createdAt: 'desc',
+      },
+      take: limit,
+      skip: offset,
+    });
+
+    const data = apiKeys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      scopes: key.scopes as string[],
+      createdAt: key.createdAt.toISOString(),
+    }));
+
+    const totalPages = Math.ceil(total / limit);
+    const meta: PaginationMeta = {
+      page,
+      limit,
+      total,
+      totalPages,
+      hasNext: page < totalPages,
+      hasPrev: page > 1,
+    };
+
+    return { data, meta };
+  }
+
+  async getApiKeyById(id: string): Promise<ApiKeyResponseDto> {
+    const apiKey = await this.prisma.apiKey.findUnique({
+      where: { id },
+    });
+
+    if (!apiKey) {
+      throw new NotFoundException('API key not found');
+    }
+
+    return {
+      id: apiKey.id,
+      name: apiKey.name,
+      scopes: apiKey.scopes as string[],
+      createdAt: apiKey.createdAt.toISOString(),
+    };
+  }
+
+  async updateApiKey(id: string, updateData: { name?: string; scopes?: string[] }): Promise<ApiKeyResponseDto> {
+    const apiKey = await this.prisma.apiKey.update({
+      where: { id },
+      data: {
+        ...(updateData.name && { name: updateData.name }),
+        ...(updateData.scopes && { scopes: updateData.scopes as any }),
+      },
+    });
+
+    return {
+      id: apiKey.id,
+      name: apiKey.name,
+      scopes: apiKey.scopes as string[],
+      createdAt: apiKey.createdAt.toISOString(),
+    };
+  }
+
+  async deleteApiKey(id: string): Promise<void> {
+    await this.prisma.apiKey.delete({
+      where: { id },
+    });
+  }
+
+  async regenerateApiKey(id: string): Promise<{ apiKey: string; keyData: ApiKeyResponseDto }> {
+    // Generate a new API key
+    const newApiKey = this.generateRandomKey();
+    const newKeyHash = await argon2.hash(newApiKey);
+
+    // Update the database record
+    const apiKeyRecord = await this.prisma.apiKey.update({
+      where: { id },
+      data: {
+        keyHash: newKeyHash,
+      },
+    });
+
+    const keyData: ApiKeyResponseDto = {
+      id: apiKeyRecord.id,
+      name: apiKeyRecord.name,
+      scopes: apiKeyRecord.scopes as string[],
+      createdAt: apiKeyRecord.createdAt.toISOString(),
+    };
+
+    return { apiKey: newApiKey, keyData };
   }
 
   private generateRandomKey(length: number = 32): string {

@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ApiKeyService } from './api-key.service';
 
@@ -15,10 +15,15 @@ export class ScopeGuard implements CanActivate {
     const userScopes = request.apiKeyScopes as string[];
 
     if (!userScopes) {
-      return false;
+      throw new ForbiddenException('API key validation required before scope check');
     }
 
-    return this.apiKeyService.validateScopes(this.requiredScopes, userScopes);
+    const hasRequiredScopes = this.apiKeyService.validateScopes(this.requiredScopes, userScopes);
+    if (!hasRequiredScopes) {
+      throw new ForbiddenException(`Insufficient permissions. Required scopes: ${this.requiredScopes.join(', ')}`);
+    }
+
+    return true;
   }
 }
 

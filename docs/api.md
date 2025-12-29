@@ -16,8 +16,8 @@ curl -H "X-API-Key: your-api-key-here" \
 | Scope      | Description                     | Endpoints                                               |
 | ---------- | ------------------------------- | ------------------------------------------------------- |
 | `topic`    | Topic notifications only        | `POST /v1/notifications/topic`                          |
-| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications`, `POST /v1/notifications/user-status/*` |
-| `admin`    | Full system access              | All endpoints + `GET /v1/notifications/admin/all`, `GET /v1/devices/admin/all` |
+| `personal` | Personal, device & user status  | `POST /v1/devices/*`, `POST /v1/notifications/personal`, `GET /v1/notifications/history`, `POST /v1/notifications/user-status/*` |
+| `admin`    | Full system access              | All endpoints + `GET /v1/notifications/admin/all`, `GET /v1/devices/admin/all`, `POST|GET|PUT|DELETE /v1/api-keys/*` |
 
 ### Scope-Based Authorization
 
@@ -344,7 +344,60 @@ Send personalized notifications to specific users.
 
 **Note:** Notifications are automatically queued for offline/paused users and delivered when they come back online. The response indicates which users received immediate delivery vs. queuing.
 
-### GET /v1/notifications
+### GET /v1/notifications/:id
+
+Get a specific notification by its target ID.
+
+**Required Scope:** `personal` or `admin`
+
+**Query Parameters:**
+
+- `userId` (required): User identifier (to verify ownership)
+
+**Request:**
+
+```
+GET /v1/notifications/target-uuid?userId=user123
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "target-uuid",
+  "targetId": "target-uuid",
+  "type": "personal",
+  "title": "Personal Message",
+  "body": "Hello! You have a new message.",
+  "data": {
+    "type": "message",
+    "senderId": "admin"
+  },
+  "createdAt": "2025-12-09T22:50:00.000Z",
+  "read": false,
+  "deliveredAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "User not found"
+}
+```
+
+**Or:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Notification target not found or does not belong to the specified user"
+}
+```
+
+### GET /v1/notifications/history
 
 Retrieve user's notification history with pagination.
 
@@ -359,7 +412,7 @@ Retrieve user's notification history with pagination.
 **Request:**
 
 ```
-GET /v1/notifications?userId=user123&page=1&limit=10
+GET /v1/notifications/history?userId=user123&page=1&limit=10
 ```
 
 **Response (200 OK):**
@@ -400,6 +453,9 @@ Mark a specific notification as read.
 **Required Scope:** `personal` or `admin`
 **Ownership:** User can only mark their own notifications
 
+**Path Parameters:**
+- `id`: Notification target ID (obtained from notification history endpoints)
+
 **Request Body:**
 
 ```json
@@ -414,10 +470,100 @@ Mark a specific notification as read.
 {
   "id": "target-uuid",
   "notificationId": "notification-uuid",
-  "userId": "user123",
+  "deviceId": "device-uuid",
   "read": true,
-  "deliveredAt": "2025-12-09T22:50:05.000Z"
+  "deliveredAt": "2025-12-09T22:50:05.000Z",
+  "createdAt": "2025-12-09T22:50:00.000Z",
+  "updatedAt": "2025-12-09T22:50:05.000Z"
 }
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "User not found"
+}
+```
+
+**Or:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Notification target not found or does not belong to the specified user"
+}
+```
+
+**Example:**
+
+```bash
+# First, get notification history to find target IDs
+curl -H "X-API-Key: personal-key" \
+     "https://api.example.com/v1/notifications/history?userId=user123"
+
+# Then mark a specific notification as read using its target ID
+curl -X PATCH https://api.example.com/v1/notifications/target-uuid/mark-read \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: personal-key" \
+  -d '{"userId": "user123"}'
+```
+
+### PATCH /v1/notifications/mark-read
+
+Mark multiple notifications as read in a single request.
+
+**Required Scope:** `personal` or `admin`
+**Ownership:** User can only mark their own notifications
+
+**Request Body:**
+
+```json
+{
+  "userId": "user123",
+  "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "markedAsRead": 3,
+  "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
+}
+```
+
+**Response (404 Not Found):**
+
+```json
+{
+  "statusCode": 404,
+  "message": "User not found"
+}
+```
+
+**Or:**
+
+```json
+{
+  "statusCode": 404,
+  "message": "Notification targets not found or do not belong to the specified user: target-uuid-2"
+}
+```
+
+**Example:**
+
+```bash
+# Mark multiple notifications as read
+curl -X PATCH https://api.example.com/v1/notifications/mark-read \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: personal-key" \
+  -d '{
+    "userId": "user123",
+    "targetIds": ["target-uuid-1", "target-uuid-2", "target-uuid-3"]
+  }'
 ```
 
 ### POST /v1/notifications/sync
@@ -676,14 +822,23 @@ curl -X POST https://api.example.com/v1/notifications/personal \
   -d '{"userIds": ["test-user"], "title": "Test", "body": "Hello from API!"}'
 
 # 3. Get notification history
-curl "https://api.example.com/v1/notifications?userId=test-user" \
+curl "https://api.example.com/v1/notifications/history?userId=test-user" \
   -H "X-API-Key: personal-key"
 
-# 4. Mark as read
+# 4. Mark single notification as read
 curl -X PATCH https://api.example.com/v1/notifications/target-id/mark-read \
   -H "Content-Type: application/json" \
   -H "X-API-Key: personal-key" \
   -d '{"userId": "test-user"}'
+
+# 5. Mark multiple notifications as read (bulk operation)
+curl -X PATCH https://api.example.com/v1/notifications/mark-read \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: personal-key" \
+  -d '{
+    "userId": "test-user",
+    "targetIds": ["target-id-1", "target-id-2", "target-id-3"]
+  }'
 ```
 
 ### 2. Topic Notification Test
@@ -704,7 +859,204 @@ curl -X POST https://api.example.com/v1/notifications/topic \
 
 ---
 
-## 🔗 Related Topics
+## � API Key Management
+
+Admin endpoints for managing API keys. All endpoints require `admin` scope.
+
+### POST /v1/api-keys
+
+Create a new API key.
+
+**Required Scope:** `admin`
+
+**Request Body:**
+
+```json
+{
+  "name": "Mobile App Key",
+  "scopes": ["personal", "topic"]
+}
+```
+
+**Response (201 Created):**
+
+```json
+{
+  "apiKey": "ak_1234567890abcdef",
+  "keyData": {
+    "id": "api-key-uuid",
+    "name": "Mobile App Key",
+    "scopes": ["personal", "topic"],
+    "createdAt": "2025-12-09T22:50:00.000Z"
+  }
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST https://api.example.com/v1/api-keys \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: admin-key" \
+  -d '{
+    "name": "Mobile App Key",
+    "scopes": ["personal", "topic"]
+  }'
+```
+
+### GET /v1/api-keys
+
+Get all API keys with pagination.
+
+**Required Scope:** `admin`
+
+**Query Parameters:**
+- `page` (optional): Page number (default: 1)
+- `limit` (optional): Items per page (default: 10)
+
+**Response (200 OK):**
+
+```json
+{
+  "data": [
+    {
+      "id": "api-key-uuid-1",
+      "name": "Mobile App Key",
+      "scopes": ["personal", "topic"],
+      "createdAt": "2025-12-09T22:50:00.000Z"
+    },
+    {
+      "id": "api-key-uuid-2",
+      "name": "Admin Key",
+      "scopes": ["admin"],
+      "createdAt": "2025-12-09T22:45:00.000Z"
+    }
+  ],
+  "meta": {
+    "page": 1,
+    "limit": 10,
+    "total": 2,
+    "totalPages": 1,
+    "hasNext": false,
+    "hasPrev": false
+  }
+}
+```
+
+**Example:**
+
+```bash
+curl -H "X-API-Key: admin-key" \
+     "https://api.example.com/v1/api-keys?page=1&limit=10"
+```
+
+### GET /v1/api-keys/:id
+
+Get a specific API key by ID.
+
+**Required Scope:** `admin`
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "api-key-uuid",
+  "name": "Mobile App Key",
+  "scopes": ["personal", "topic"],
+  "createdAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+**Example:**
+
+```bash
+curl -H "X-API-Key: admin-key" \
+     https://api.example.com/v1/api-keys/api-key-uuid
+```
+
+### PUT /v1/api-keys/:id
+
+Update an API key's name and/or scopes.
+
+**Required Scope:** `admin`
+
+**Request Body:**
+
+```json
+{
+  "name": "Updated Mobile App Key",
+  "scopes": ["personal", "topic", "admin"]
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "api-key-uuid",
+  "name": "Updated Mobile App Key",
+  "scopes": ["personal", "topic", "admin"],
+  "createdAt": "2025-12-09T22:50:00.000Z"
+}
+```
+
+**Example:**
+
+```bash
+curl -X PUT https://api.example.com/v1/api-keys/api-key-uuid \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: admin-key" \
+  -d '{
+    "name": "Updated Mobile App Key",
+    "scopes": ["personal", "topic", "admin"]
+  }'
+```
+
+### DELETE /v1/api-keys/:id
+
+Delete an API key.
+
+**Required Scope:** `admin`
+
+**Response (204 No Content):**
+
+**Example:**
+
+```bash
+curl -X DELETE https://api.example.com/v1/api-keys/api-key-uuid \
+  -H "X-API-Key: admin-key"
+```
+
+### POST /v1/api-keys/:id/regenerate
+
+Regenerate an API key (creates a new key hash while keeping the same ID).
+
+**Required Scope:** `admin`
+
+**Response (200 OK):**
+
+```json
+{
+  "apiKey": "ak_new1234567890abcdef",
+  "keyData": {
+    "id": "api-key-uuid",
+    "name": "Mobile App Key",
+    "scopes": ["personal", "topic"],
+    "createdAt": "2025-12-09T22:50:00.000Z"
+  }
+}
+```
+
+**Example:**
+
+```bash
+curl -X POST https://api.example.com/v1/api-keys/api-key-uuid/regenerate \
+  -H "X-API-Key: admin-key"
+```
+
+---
+
+## �🔗 Related Topics
 
 - **[Setup Guide](./setup.md)** - Environment setup and configuration
 - **[Architecture](./architecture.md)** - System design and data flow

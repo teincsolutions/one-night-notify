@@ -1,4 +1,4 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
+import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { ApiKeyService } from './api-key.service';
 
@@ -19,12 +19,12 @@ export class ApiKeyGuard implements CanActivate {
     }
 
     if (!apiKey) {
-      return false;
+      throw new UnauthorizedException('API key is required');
     }
 
     const validation = await this.apiKeyService.validateApiKey(apiKey);
     if (!validation.isValid) {
-      return false;
+      throw new UnauthorizedException('Invalid API key');
     }
 
     // Store scopes in request for use by scope guards

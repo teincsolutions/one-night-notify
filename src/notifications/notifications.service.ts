@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TopicNotificationDto } from '../common/dto/topic-notification.dto';
 import { PersonalNotificationDto } from '../common/dto/personal-notification.dto';
@@ -249,7 +249,59 @@ export class NotificationsService {
     return { data, meta };
   }
 
+  async getNotificationByTargetId(targetId: string, userId: string) {
+    // First check if user has any devices
+    const userDevices = await this.prisma.device.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (userDevices.length === 0) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Get notification target with notification data, ensuring it belongs to the user
+    const target = await this.prisma.notificationTarget.findFirst({
+      where: {
+        id: targetId,
+        device: {
+          userId,
+        },
+      },
+      include: {
+        notification: true,
+      },
+    });
+
+    if (!target) {
+      throw new NotFoundException('Notification target not found or does not belong to the specified user');
+    }
+
+    return {
+      id: target.id,
+      targetId: target.id,
+      type: target.notification.type,
+      title: target.notification.title,
+      body: target.notification.body,
+      data: target.notification.data,
+      topic: target.notification.topic,
+      createdAt: target.createdAt.toISOString(),
+      read: target.read,
+      deliveredAt: target.deliveredAt?.toISOString(),
+    };
+  }
+
   async markNotificationRead(targetId: string, userId: string) {
+    // First check if user has any devices
+    const userDevices = await this.prisma.device.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (userDevices.length === 0) {
+      throw new NotFoundException('User not found');
+    }
+
     // Verify ownership
     const target = await this.prisma.notificationTarget.findFirst({
       where: {
@@ -261,7 +313,7 @@ export class NotificationsService {
     });
 
     if (!target) {
-      throw new Error('Notification not found');
+      throw new NotFoundException('Notification target not found or does not belong to the specified user');
     }
 
     return this.prisma.notificationTarget.update({
@@ -271,6 +323,54 @@ export class NotificationsService {
         deliveredAt: target.deliveredAt || new Date(),
       },
     });
+  }
+
+  async markNotificationsRead(targetIds: string[], userId: string) {
+    // First check if user has any devices
+    const userDevices = await this.prisma.device.findMany({
+      where: { userId },
+      select: { id: true },
+    });
+
+    if (userDevices.length === 0) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify ownership of all targets
+    const targets = await this.prisma.notificationTarget.findMany({
+      where: {
+        id: { in: targetIds },
+        device: {
+          userId,
+        },
+      },
+    });
+
+    // Check if all requested targets were found and belong to the user
+    const foundTargetIds = targets.map(t => t.id);
+    const notFoundIds = targetIds.filter(id => !foundTargetIds.includes(id));
+
+    if (notFoundIds.length > 0) {
+      throw new NotFoundException(`Notification targets not found or do not belong to the specified user: ${notFoundIds.join(', ')}`);
+    }
+
+    // Update all targets to mark as read
+    const updatePromises = targets.map(target =>
+      this.prisma.notificationTarget.update({
+        where: { id: target.id },
+        data: {
+          read: true,
+          deliveredAt: target.deliveredAt || new Date(),
+        },
+      })
+    );
+
+    const results = await Promise.all(updatePromises);
+
+    return {
+      markedAsRead: results.length,
+      targetIds: results.map(r => r.id),
+    };
   }
 
   private async updateNotificationTargetsWithResponse(
