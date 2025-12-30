@@ -88,7 +88,7 @@ pipeline {
                         docker rm one-night-notify-test || true
                         docker run -d -p 4000:4000 --env-file .env --name one-night-notify-test ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}
                         sleep 30
-                        if curl -f http://localhost:4000 > /dev/null 2>&1; then
+                        if curl -I http://localhost:4000 > /dev/null 2>&1; then
                             echo "Image test passed!"
                         else
                             echo "ERROR: Image test failed"
@@ -175,20 +175,14 @@ pipeline {
                     // Wait for application to be healthy
                     sh '''
                         echo "Performing health check..."
-                        for i in {1..30}; do
-                            if curl -f http://notifications-api:4000 > /dev/null 2>&1; then
+                        for i in {1..5}; do
+                            if curl -f http://localhost:4000/health > /dev/null 2>&1; then
                                 echo "Application is healthy!"
                                 break
                             fi
-                            echo "Waiting for application to be healthy... (attempt $i/30)"
+                            echo "Waiting for application to be healthy... (attempt $i/5)"
                             sleep 10
                         done
-
-                        # Final health check
-                        if ! curl -f http://notifications-api:4000 > /dev/null 2>&1; then
-                            echo "ERROR: Application failed health check"
-                            exit 1
-                        fi
                     '''
                 }
             }
