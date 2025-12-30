@@ -122,7 +122,7 @@ pipeline {
             }
         }
 
-        stage('Database Migration & Seeding') {
+        stage('DB Migration & Seeding') {
             steps {
                 script {
                     // Run database migration
@@ -134,7 +134,7 @@ pipeline {
                             docker run --rm --env-file .env ${DOCKER_IMAGE}:latest npx prisma migrate deploy
                             echo "Database migration completed successfully"
                              echo "Seeding database..."
-                            docker run --rm --env-file .env ${DOCKER_IMAGE}:latest npm run seed
+                            docker run --rm --env-file .env ${DOCKER_IMAGE}:latest node ./dist/scripts/seed
                             echo "Database seeding completed successfully"
                         """
                     }
