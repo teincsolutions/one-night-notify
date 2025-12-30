@@ -1,7 +1,7 @@
 services:
   # Notifications API Service
   api:
-    image: notifications:latest
+    image: one-night-notify:latest
     container_name: notifications-api
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
@@ -21,7 +21,7 @@ services:
     ports:
       - "${API_PORT:-4000}:4000"
     networks:
-      - notifications-network
+      - one-night-network
     volumes:
       - ./logs:/app/logs
     healthcheck:
@@ -41,7 +41,7 @@ services:
 
   # BullMQ Worker Service (same image, different command)
   worker:
-    image: notifications:latest
+    image: one-night-notify:latest
     container_name: notifications-worker
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
@@ -55,7 +55,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
       PRISMA_CLI_BINARY_TARGETS: linux-musl-arm64-openssl-1.1.x
     networks:
-      - notifications-network
+      - one-night-network
     volumes:
       - ./logs:/app/logs
     deploy:
@@ -69,5 +69,5 @@ services:
           memory: 256M
 
 networks:
-  notifications-network:
+  one-night-network:
     driver: bridge

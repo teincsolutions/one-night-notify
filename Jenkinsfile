@@ -4,6 +4,9 @@ pipeline {
     environment {
         DOCKER_IMAGE = 'one-night-notify'
         DOCKER_REGISTRY = 'docker.io'
+        PORT = '4000'
+        RATE_LIMIT_POINTS = '100'
+        RATE_LIMIT_DURATION = '60'
     }
 
     stages {
@@ -46,13 +49,15 @@ pipeline {
                 script {
                     // Set up environment variables for the application
                     withCredentials([
-                        string(credentialsId: 'smtp-user', variable: 'SMTP_USER'),
-                        string(credentialsId: 'smtp-pass', variable: 'SMTP_PASS'),
-                        string(credentialsId: 'contact-email', variable: 'CONTACT_EMAIL')
+                        string(credentialsId: 'database-url', variable: 'DATABASE_URL'),
+                        string(credentialsId: 'redis-url', variable: 'REDIS_URL'),
+                        string(credentialsId: 'firebase-service-account-json', variable: 'FIREBASE_SERVICE_ACCOUNT_JSON'),
+                        string(credentialsId: 'api-key-master', variable: 'API_KEY_MASTER'),
+                        string(credentialsId: 'jwt-secret', variable: 'JWT_SECRET'),
                     ]) {
                         sh '''
                             echo "Setting up environment variables..."
-                            envsubst < .env.example > .env
+                            envsubst < .env.template > .env
                             echo "Environment file created successfully"
                         '''
                     }
@@ -81,7 +86,7 @@ pipeline {
                         echo "Testing Docker image..."
                         docker stop one-night-notify-test || true
                         docker rm one-night-notify-test || true
-                        docker run -d --name one-night-notify-test --network notify-network ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker run -d --name one-night-notify-test --network one-night-network ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}
                         sleep 30
                         if curl -f http://one-night-notify-test:4000 > /dev/null 2>&1; then
                             echo "Image test passed!"
@@ -116,15 +121,49 @@ pipeline {
             }
         }
 
+        stage('Database Migration') {
+            steps {
+                script {
+                    // Run database migration
+                    withCredentials([
+                        string(credentialsId: 'database-url', variable: 'DATABASE_URL')
+                    ]) {
+                        sh """
+                            echo "Running database migration..."
+                            docker run --rm -e DATABASE_URL=\$DATABASE_URL ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest npx prisma migrate deploy
+                            echo "Database migration completed successfully"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Seed Database') {
+            steps {
+                script {
+                    // Run database seeding
+                    withCredentials([
+                        string(credentialsId: 'database-url', variable: 'DATABASE_URL')
+                    ]) {
+                        sh """
+                            echo "Seeding database..."
+                            docker run --rm -e DATABASE_URL=\$DATABASE_URL ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest npm run seed
+                            echo "Database seeding completed successfully"
+                        """
+                    }
+                }
+            }
+        }
+
         stage('Deploy') {
             steps {
                 script {
-                    // Deploy using docker compose
+                    // Deploy using docker compose production file
                     sh '''
                         echo "Deploying application..."
-                        docker compose down || true
-                        docker compose pull
-                        docker compose up -d
+                        docker compose -f docker-compose.production.yml down || true
+                        docker compose -f docker-compose.production.yml pull
+                        docker compose -f docker-compose.production.yml up -d
                     '''
                 }
             }
@@ -137,7 +176,7 @@ pipeline {
                     sh '''
                         echo "Performing health check..."
                         for i in {1..30}; do
-                            if curl -f http://notify-api:4000 > /dev/null 2>&1; then
+                            if curl -f http://notifications-api:4000 > /dev/null 2>&1; then
                                 echo "Application is healthy!"
                                 break
                             fi
@@ -146,7 +185,7 @@ pipeline {
                         done
 
                         # Final health check
-                        if ! curl -f http://notify-api:4000 > /dev/null 2>&1; then
+                        if ! curl -f http://notifications-api:4000 > /dev/null 2>&1; then
                             echo "ERROR: Application failed health check"
                             exit 1
                         fi

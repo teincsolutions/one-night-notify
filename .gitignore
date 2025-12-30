@@ -13,8 +13,8 @@ build/
 
 # Environment variables
 .env*
-!.env.production.example
 !.env.example
+!.env.template
 
 # Logs
 logs/
