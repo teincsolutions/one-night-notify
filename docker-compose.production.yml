@@ -1,8 +1,22 @@
 services:
+  # Redis for BullMQ
+  redis:
+    image: redis:7-alpine
+    container_name: one-night-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - one-night-network
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
   # Notifications API Service
   api:
     image: one-night-notify:latest
-    container_name: notifications-api
+    container_name: one-night-api
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
     environment:
@@ -42,7 +56,6 @@ services:
   # BullMQ Worker Service (same image, different command)
   worker:
     image: one-night-notify:latest
-    container_name: notifications-worker
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
     environment:
@@ -54,6 +67,8 @@ services:
       FIREBASE_SERVICE_ACCOUNT_JSON: ${FIREBASE_SERVICE_ACCOUNT_JSON}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       PRISMA_CLI_BINARY_TARGETS: linux-musl-arm64-openssl-1.1.x
+    depends_on:
+      - redis
     networks:
       - one-night-network
     volumes:
@@ -67,6 +82,9 @@ services:
         reservations:
           cpus: '0.5'
           memory: 256M
+volumes:
+  redis_data:
+    driver: local
 
 networks:
   one-night-network:
