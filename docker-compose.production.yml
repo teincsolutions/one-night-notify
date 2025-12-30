@@ -9,7 +9,7 @@ services:
     volumes:
       - redis_data:/data
     networks:
-      - one-night-network
+      - teinc-internal-net
     healthcheck:
       test: [ "CMD", "redis-cli", "ping" ]
       interval: 30s
@@ -26,7 +26,10 @@ services:
     ports:
       - "${API_PORT:-4000}:4000"
     networks:
-      - one-night-network
+      - teinc-internal-net
+      - teinc-internet
+    depends_on:
+      - redis
     volumes:
       - ./logs:/app/logs
     healthcheck:
@@ -54,7 +57,8 @@ services:
     depends_on:
       - redis
     networks:
-      - one-night-network
+      - teinc-internal-net
+      - teinc-internet
     volumes:
       - ./logs:/app/logs
     deploy:
@@ -71,5 +75,7 @@ volumes:
     driver: local
 
 networks:
-  one-night-network:
-    driver: bridge
+  teinc-internet:
+    external: true
+  teinc-internal-net:
+    external: true

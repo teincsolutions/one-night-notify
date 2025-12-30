@@ -86,9 +86,9 @@ pipeline {
                         echo "Testing Docker image..."
                         docker stop one-night-notify-test || true
                         docker rm one-night-notify-test || true
-                        docker run -d -p 4000:4000 --env-file .env --name one-night-notify-test ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker run -d -p 4000:4000 --env-file .env --network teinc-internal-net --name one-night-notify-test ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}
                         sleep 30
-                        if curl -I http://localhost:4000 > /dev/null 2>&1; then
+                        if curl -I http://one-night-notify-test:4000 > /dev/null 2>&1; then
                             echo "Image test passed!"
                         else
                             echo "ERROR: Image test failed"
