@@ -17,8 +17,8 @@ services:
       retries: 3
   # Notifications API Service
   api:
-    image: one-night-notify:latest
-    container_name: one-night-api
+    image: teincsolutions/one-night-notify:latest
+    container_name: one-night-prod
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
     env_file:
@@ -49,7 +49,7 @@ services:
 
   # BullMQ Worker Service (same image, different command)
   worker:
-    image: one-night-notify:latest
+    image: teincsolutions/one-night-notify:latest
     restart: unless-stopped
     command: [ "dumb-init", "node", "dist/main" ]
     env_file:

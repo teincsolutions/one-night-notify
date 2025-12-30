@@ -2,8 +2,9 @@ pipeline {
     agent { node { label 'teinc-agent' } }
 
     environment {
-        DOCKER_IMAGE = 'one-night-notify'
+        DOCKER_IMAGE = 'teincsolutions/one-night-notify'
         DOCKER_REGISTRY = 'docker.io'
+
         PORT = '4000'
         RATE_LIMIT_POINTS = '100'
         RATE_LIMIT_DURATION = '60'
@@ -71,8 +72,8 @@ pipeline {
                     // Build Docker image
                     sh """
                         echo "Building Docker image..."
-                        docker build -t ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} .
-                        docker tag ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest
+                        docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                        docker tag ${DOCKER_IMAGE}:${DOCKER_TAG} ${DOCKER_IMAGE}:latest
                     """
                 }
             }
@@ -86,7 +87,7 @@ pipeline {
                         echo "Testing Docker image..."
                         docker stop one-night-notify-test || true
                         docker rm one-night-notify-test || true
-                        docker run -d -p 4000:4000 --env-file .env --network teinc-internal-net --name one-night-notify-test ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker run -d -p 4000:4000 --env-file .env --network teinc-internal-net --name one-night-notify-test ${DOCKER_IMAGE}:${DOCKER_TAG}
                         sleep 30
                         if curl -I http://one-night-notify-test:4000 > /dev/null 2>&1; then
                             echo "Image test passed!"
@@ -114,14 +115,14 @@ pipeline {
                     // Push Docker image to registry
                     sh """
                         echo "Pushing Docker image to registry..."
-                        docker push ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:${DOCKER_TAG}
-                        docker push ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest
+                        docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        docker push ${DOCKER_IMAGE}:latest
                     """
                 }
             }
         }
 
-        stage('Database Migration') {
+        stage('Database Migration & Seeding') {
             steps {
                 script {
                     // Run database migration
@@ -130,31 +131,16 @@ pipeline {
                     ]) {
                         sh """
                             echo "Running database migration..."
-                            docker run --rm -e DATABASE_URL=\$DATABASE_URL ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest npx prisma migrate deploy
+                            docker run --rm --env-file .env ${DOCKER_IMAGE}:latest npx prisma migrate deploy
                             echo "Database migration completed successfully"
-                        """
-                    }
-                }
-            }
-        }
-
-        stage('Seed Database') {
-            steps {
-                script {
-                    // Run database seeding
-                    withCredentials([
-                        string(credentialsId: 'database-url', variable: 'DATABASE_URL')
-                    ]) {
-                        sh """
-                            echo "Seeding database..."
-                            docker run --rm -e DATABASE_URL=\$DATABASE_URL ${DOCKER_REGISTRY}/${DOCKER_IMAGE}:latest npm run seed
+                             echo "Seeding database..."
+                            docker run --rm --env-file .env ${DOCKER_IMAGE}:latest npm run seed
                             echo "Database seeding completed successfully"
                         """
                     }
                 }
             }
         }
-
         stage('Deploy') {
             steps {
                 script {
@@ -176,7 +162,7 @@ pipeline {
                     sh '''
                         echo "Performing health check..."
                         for i in {1..5}; do
-                            if curl -f http://localhost:4000/health > /dev/null 2>&1; then
+                            if curl -f http://one-night-prod:4000/health > /dev/null 2>&1; then
                                 echo "Application is healthy!"
                                 break
                             fi
@@ -195,6 +181,8 @@ pipeline {
                     sh '''
                         echo "Cleaning up old Docker images..."
                         docker image prune -f
+                        echo "Removing temporary files..." 
+                        rm -f .env
                     '''
                 }
             }
