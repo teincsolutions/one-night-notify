@@ -13,9 +13,6 @@ RUN npm ci --include=dev --legacy-peer-deps
 # Copy source code
 COPY . .
 
-# Verify migrations are present
-RUN ls -la prisma/migrations/
-
 # Generate Prisma client
 RUN npx prisma generate
 
