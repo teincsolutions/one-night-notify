@@ -47,7 +47,7 @@ coverage/
 *.lcov
 
 # Prisma
-prisma/migrations/.migration_lock
+prisma/migrations/migration_lock.toml
 
 # Docker
 *.log
