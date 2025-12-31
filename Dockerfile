@@ -42,6 +42,7 @@ RUN npm ci --only=production --legacy-peer-deps && npm cache clean --force
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/prisma/migrations ./prisma/migrations
 
 # Change ownership to nodejs user
 RUN chown -R nestjs:nodejs /app
