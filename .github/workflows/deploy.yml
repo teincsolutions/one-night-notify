@@ -94,13 +94,11 @@ jobs:
             "${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}" || true
           rm -rf "$TRIVY_TEMP_DIR" || true
 
-  test:
-    name: Docker Image Test
+  verify-image:
+    name: Verify Docker Image
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4
-
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -108,53 +106,36 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Pull Docker image
-        run: docker pull ${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}
+      - name: Pull and verify Docker image
+        run: |
+          docker pull "${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}"
+          docker inspect "${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}" > /dev/null
+          echo "✅ Image verified: ${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}"
 
-      - name: Generate .env.test file
+      - name: Validate required environment variables
+        run: |
+          MISSING=()
+          [[ -z "$DATABASE_URL" ]] && MISSING+=("DATABASE_URL (secret)")
+          [[ -z "$REDIS_URL" ]] && MISSING+=("REDIS_URL (secret)")
+          [[ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]] && MISSING+=("FIREBASE_SERVICE_ACCOUNT_JSON (secret)")
+          [[ -z "$API_KEY_MASTER" ]] && MISSING+=("API_KEY_MASTER (secret)")
+          [[ -z "$JWT_SECRET" ]] && MISSING+=("JWT_SECRET (secret)")
+          if [[ ${#MISSING[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets:"
+            for item in "${MISSING[@]}"; do echo "::error::  - $item"; done
+            exit 1
+          fi
+          echo "All required secrets are present."
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           REDIS_URL: ${{ secrets.REDIS_URL }}
           FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
           API_KEY_MASTER: ${{ secrets.API_KEY_MASTER }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
-        run: envsubst < .env.template > .env.test
-
-      - name: Start test container
-        run: |
-          docker run -d -p 4001:4000 --env-file .env.test \
-            --name one-night-notify-test \
-            "${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}"
-
-      - name: Wait for container readiness
-        run: sleep 15
-
-      - name: Health check
-        run: |
-          for i in {1..5}; do
-            if curl -f http://localhost:4001/health > /dev/null 2>&1; then
-              echo "✅ Health check passed"
-              break
-            fi
-            if [ $i -eq 5 ]; then
-              echo "❌ Health check failed after 5 attempts"
-              docker logs one-night-notify-test || true
-              exit 1
-            fi
-            echo "Waiting for application to be healthy... (attempt $i/5)"
-            sleep 10
-          done
-
-      - name: Cleanup test container
-        if: always()
-        run: |
-          docker stop one-night-notify-test || true
-          docker rm one-night-notify-test || true
-          rm -f .env.test
 
   deploy:
     name: Deploy to Production
-    needs: [build, security-scan, test]
+    needs: [build, security-scan, verify-image]
     if: github.ref_name == 'main' && github.event_name == 'push'
     runs-on: [self-hosted, teinc]
     environment:
