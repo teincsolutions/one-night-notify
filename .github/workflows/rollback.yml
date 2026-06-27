@@ -15,7 +15,7 @@ env:
 jobs:
   rollback:
     name: Rollback to Previous Version
-    runs-on: [self-hosted, teinc]
+    runs-on: [self-hosted, teinc-run-1]
     environment:
       name: production
     steps:

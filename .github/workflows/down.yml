@@ -6,7 +6,7 @@ on:
 jobs:
   down:
     name: Bring down production
-    runs-on: [self-hosted, teinc]
+    runs-on: [self-hosted, teinc-run-1]
     steps:
       - uses: actions/checkout@v4
 
