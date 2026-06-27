@@ -8,7 +8,12 @@ jobs:
     name: Bring down production
     runs-on: [self-hosted, teinc-run-1]
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        run: |
+          git init
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git fetch --depth=1 origin ${{ github.sha }}
+          git checkout ${{ github.sha }}
 
       - name: Stop and remove containers
         run: |
