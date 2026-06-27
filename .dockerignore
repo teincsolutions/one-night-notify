@@ -1,0 +1,9 @@
+node_modules
+.git
+README.md
+docs
+.vscode
+*.log
+dist
+.env
+.env.*

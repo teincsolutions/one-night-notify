@@ -1,0 +1,116 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Image tag to rollback to (leave empty for previous tag)
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/one-night-notify
+
+jobs:
+  rollback:
+    name: Rollback to Previous Version
+    runs-on: [self-hosted, teinc]
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Determine rollback tag
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.image_tag }}" ]; then
+            echo "tag=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            FILE="/tmp/one-night-notify-previous-tag.txt"
+            if [ -f "$FILE" ]; then
+              TAG=$(cat "$FILE")
+              echo "tag=$TAG" >> $GITHUB_OUTPUT
+            else
+              echo "::error::No previous tag file found at $FILE"
+              echo "::error::Provide image_tag input or deploy once first."
+              exit 1
+            fi
+          fi
+
+      - name: Validate secrets
+        run: |
+          MISSING=()
+          [[ -z "$DATABASE_URL" ]] && MISSING+=("DATABASE_URL (secret)")
+          [[ -z "$REDIS_URL" ]] && MISSING+=("REDIS_URL (secret)")
+          [[ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]] && MISSING+=("FIREBASE_SERVICE_ACCOUNT_JSON (secret)")
+          [[ -z "$API_KEY_MASTER" ]] && MISSING+=("API_KEY_MASTER (secret)")
+          [[ -z "$JWT_SECRET" ]] && MISSING+=("JWT_SECRET (secret)")
+          if [[ ${#MISSING[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets:"
+            for item in "${MISSING[@]}"; do echo "::error::  - $item"; done
+            exit 1
+          fi
+          echo "All required secrets are present."
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          API_KEY_MASTER: ${{ secrets.API_KEY_MASTER }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
+      - name: Generate .env file
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          API_KEY_MASTER: ${{ secrets.API_KEY_MASTER }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: envsubst < .env.template > .env
+
+      - name: Pull rollback image
+        run: docker pull "${DOCKER_IMAGE_NAME}:${{ steps.tag.outputs.tag }}"
+
+      - name: Run database migrations
+        run: |
+          docker run --rm --network teinc-internal-net --env-file .env \
+            --name one-night-migration-rollback \
+            "${DOCKER_IMAGE_NAME}:${{ steps.tag.outputs.tag }}" \
+            npx prisma migrate deploy
+
+      - name: Stop existing containers
+        run: docker compose -f docker-compose.production.yml down || true
+
+      - name: Deploy with docker-compose
+        run: |
+          docker compose -f docker-compose.production.yml pull
+          docker compose -f docker-compose.production.yml up -d
+
+      - name: Wait for container readiness
+        run: sleep 20
+
+      - name: Health check
+        run: |
+          echo "Running health check..."
+          for i in {1..5}; do
+            if docker exec one-night-prod wget --no-verbose --tries=1 --spider http://localhost:4000/health > /dev/null 2>&1; then
+              echo "✅ Rollback health check passed"
+              break
+            fi
+            if [ $i -eq 5 ]; then
+              echo "❌ Health check failed after 5 attempts"
+              docker logs one-night-prod || true
+              exit 1
+            fi
+            echo "Waiting for application to be healthy... (attempt $i/5)"
+            sleep 10
+          done
+          curl -f https://onenight-prod.teincsolutions.com/health || exit 1
+          echo "✅ External health check passed"

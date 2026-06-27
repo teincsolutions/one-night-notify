@@ -1,0 +1,294 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  DOCKER_IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/one-night-notify
+  NODE_VERSION: '16'
+  PORT: '4000'
+  RATE_LIMIT_POINTS: '100'
+  RATE_LIMIT_DURATION: '60'
+
+jobs:
+  build:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    outputs:
+      docker_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate Docker tag
+        id: tag
+        run: echo "tag=${{ github.run_number }}-$(echo ${GITHUB_SHA} | cut -c1-7)" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          tags: |
+            ${{ env.DOCKER_IMAGE_NAME }}:${{ steps.tag.outputs.tag }}
+            ${{ env.DOCKER_IMAGE_NAME }}:latest
+          push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: docker pull ${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}
+
+      - name: Trivy security scan
+        continue-on-error: true
+        run: |
+          TRIVY_TEMP_DIR="/tmp/trivy-$(date +%s)"
+          mkdir -p "$TRIVY_TEMP_DIR"
+          if [ -f .trivyignore ]; then
+            cp .trivyignore "$TRIVY_TEMP_DIR/.trivyignore"
+          fi
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$TRIVY_TEMP_DIR":/root/.trivyignore.d \
+            -v "$TRIVY_TEMP_DIR":/tmp/trivy aquasec/trivy:latest image \
+            --ignorefile /root/.trivyignore.d/.trivyignore \
+            --format json --output /tmp/trivy/trivy-report.json \
+            "${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}" || true
+          if [ -f "$TRIVY_TEMP_DIR/trivy-report.json" ]; then
+            cp "$TRIVY_TEMP_DIR/trivy-report.json" ./trivy-report.json || true
+          fi
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$TRIVY_TEMP_DIR":/root/.trivyignore.d \
+            aquasec/trivy:latest image --severity HIGH,CRITICAL \
+            --ignorefile /root/.trivyignore.d/.trivyignore \
+            "${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}" || true
+          rm -rf "$TRIVY_TEMP_DIR" || true
+
+  test:
+    name: Docker Image Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Docker image
+        run: docker pull ${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}
+
+      - name: Generate .env.test file
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          API_KEY_MASTER: ${{ secrets.API_KEY_MASTER }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: envsubst < .env.template > .env.test
+
+      - name: Start test container
+        run: |
+          docker run -d -p 4001:4000 --env-file .env.test \
+            --name one-night-notify-test \
+            "${{ env.DOCKER_IMAGE_NAME }}:${{ needs.build.outputs.docker_tag }}"
+
+      - name: Wait for container readiness
+        run: sleep 15
+
+      - name: Health check
+        run: |
+          for i in {1..5}; do
+            if curl -f http://localhost:4001/health > /dev/null 2>&1; then
+              echo "✅ Health check passed"
+              break
+            fi
+            if [ $i -eq 5 ]; then
+              echo "❌ Health check failed after 5 attempts"
+              docker logs one-night-notify-test || true
+              exit 1
+            fi
+            echo "Waiting for application to be healthy... (attempt $i/5)"
+            sleep 10
+          done
+
+      - name: Cleanup test container
+        if: always()
+        run: |
+          docker stop one-night-notify-test || true
+          docker rm one-night-notify-test || true
+          rm -f .env.test
+
+  deploy:
+    name: Deploy to Production
+    needs: [build, security-scan, test]
+    if: github.ref_name == 'main' && github.event_name == 'push'
+    runs-on: [self-hosted, teinc]
+    environment:
+      name: production
+      url: https://onenight-prod.teincsolutions.com/health
+    env:
+      DOCKER_TAG: ${{ needs.build.outputs.docker_tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate secrets
+        run: |
+          MISSING=()
+          [[ -z "$DATABASE_URL" ]] && MISSING+=("DATABASE_URL (secret)")
+          [[ -z "$REDIS_URL" ]] && MISSING+=("REDIS_URL (secret)")
+          [[ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]] && MISSING+=("FIREBASE_SERVICE_ACCOUNT_JSON (secret)")
+          [[ -z "$API_KEY_MASTER" ]] && MISSING+=("API_KEY_MASTER (secret)")
+          [[ -z "$JWT_SECRET" ]] && MISSING+=("JWT_SECRET (secret)")
+          if [[ ${#MISSING[@]} -gt 0 ]]; then
+            echo "::error::Missing required secrets:"
+            for item in "${MISSING[@]}"; do echo "::error::  - $item"; done
+            exit 1
+          fi
+          echo "All required secrets are present."
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          API_KEY_MASTER: ${{ secrets.API_KEY_MASTER }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+
+      - name: Generate .env file
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          API_KEY_MASTER: ${{ secrets.API_KEY_MASTER }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+        run: envsubst < .env.template > .env
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Save previous image tag for rollback
+        run: |
+          PREV_TAG=$(docker inspect one-night-prod --format '{{index .Config.Image}}' 2>/dev/null | rev | cut -d: -f1 | rev || echo "")
+          if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "$DOCKER_TAG" ]; then
+            echo "$PREV_TAG" > /tmp/one-night-notify-previous-tag.txt
+            echo "Saved previous tag: $PREV_TAG"
+          else
+            echo "No previous tag to save (first deploy or same tag)"
+          fi
+
+      - name: Run database migrations
+        run: |
+          docker run --rm --network teinc-internal-net --env-file .env \
+            --name one-night-migration "${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}" \
+            npx prisma migrate deploy
+
+      - name: Run database seeding
+        run: |
+          docker run --rm --network teinc-internal-net --env-file .env \
+            --name one-night-seed "${{ env.DOCKER_IMAGE_NAME }}:${{ env.DOCKER_TAG }}" \
+            node ./dist/scripts/seed
+
+      - name: Stop and remove existing containers
+        run: docker compose -f docker-compose.production.yml down --remove-orphans || true
+
+      - name: Deploy with docker-compose
+        run: |
+          docker compose -f docker-compose.production.yml pull
+          docker compose -f docker-compose.production.yml up -d
+
+      - name: Wait for container readiness
+        run: sleep 20
+
+      - name: Internal health check
+        run: |
+          echo "Running health check..."
+          for i in {1..5}; do
+            if docker exec one-night-prod wget --no-verbose --tries=1 --spider http://localhost:4000/health > /dev/null 2>&1; then
+              echo "✅ Health check passed"
+              break
+            fi
+            if [ $i -eq 5 ]; then
+              echo "❌ Health check failed after 5 attempts"
+              docker logs one-night-prod || true
+              exit 1
+            fi
+            echo "Waiting for application to be healthy... (attempt $i/5)"
+            sleep 10
+          done
+
+      - name: External health check
+        run: |
+          for i in {1..5}; do
+            if curl -f https://onenight-prod.teincsolutions.com/health > /dev/null 2>&1; then
+              echo "✅ External health check passed"
+              break
+            fi
+            if [ $i -eq 5 ]; then
+              echo "❌ External health check failed after 5 attempts"
+              exit 1
+            fi
+            echo "Waiting for external health check... (attempt $i/5)"
+            sleep 10
+          done
+
+      - name: Cleanup docker images (keep last 3)
+        run: |
+          docker images "${{ env.DOCKER_IMAGE_NAME }}" --format "{{.Tag}}" | grep -E "^[0-9]+" | sort -n | head -n -3 | xargs -r -I {} docker rmi "${{ env.DOCKER_IMAGE_NAME}}:{}" || true
+          docker image prune -f || true
+
+      - name: Cleanup env file
+        run: rm -f .env
+
+      - name: Send Slack success notification
+        if: success()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H "Content-type: application/json" \
+            --data '{"text":"✅ One Night Notify production deployment successful\nCommit: ${{ github.sha }}\nTag: ${{ env.DOCKER_TAG }}"}' \
+            "$SLACK_WEBHOOK_URL" || true
+
+      - name: Send Slack failure notification
+        if: failure()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          curl -X POST -H "Content-type: application/json" \
+            --data '{"text":"❌ One Night Notify production deployment failed\nCommit: ${{ github.sha }}\nBuild: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}' \
+            "$SLACK_WEBHOOK_URL" || true
