@@ -180,7 +180,9 @@ jobs:
             node ./dist/scripts/seed
 
       - name: Stop and remove existing containers
-        run: docker compose -f docker-compose.production.yml down --remove-orphans || true
+        run: |
+          docker compose -f docker-compose.production.yml down --remove-orphans 2>/dev/null || true
+          docker rm -f one-night-redis one-night-prod 2>/dev/null || true
 
       - name: Deploy with docker-compose
         run: |
