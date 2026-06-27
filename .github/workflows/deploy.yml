@@ -120,8 +120,7 @@ jobs:
     steps:
       - name: Checkout repository
         run: |
-          git init
-          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git remote add origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} 2>/dev/null || true
           git fetch --depth=1 origin ${{ github.sha }}
           git checkout ${{ github.sha }}
 
